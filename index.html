@@ -1,0 +1,1388 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>楠元 タスク管理</title>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@300;400;500;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0f0f12;
+    --surface: #16161a;
+    --surface2: #1e1e24;
+    --surface3: #26262e;
+    --border: #2e2e38;
+    --text: #e8e8f0;
+    --text2: #9090a8;
+    --text3: #5a5a72;
+    --accent: #6c63ff;
+    --accent2: #4ecca3;
+    --danger: #ff6b6b;
+    --warn: #ffa94d;
+    --success: #69db7c;
+    --blue: #74c0fc;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: 'Noto Sans JP', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    line-height: 1.6;
+  }
+
+  /* ヘッダー */
+  .header {
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    padding: 16px 24px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+  }
+
+  .header-left {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .header-icon {
+    width: 36px;
+    height: 36px;
+    background: linear-gradient(135deg, var(--accent), var(--accent2));
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 18px;
+  }
+
+  .header-title {
+    font-size: 16px;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+  }
+
+  .header-sub {
+    font-size: 12px;
+    color: var(--text3);
+    font-family: 'DM Mono', monospace;
+  }
+
+  .header-right {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+  }
+
+  /* ボタン */
+  .btn {
+    padding: 8px 16px;
+    border-radius: 8px;
+    border: none;
+    cursor: pointer;
+    font-size: 13px;
+    font-family: 'Noto Sans JP', sans-serif;
+    font-weight: 500;
+    transition: all 0.15s;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .btn-primary {
+    background: var(--accent);
+    color: white;
+  }
+  .btn-primary:hover { background: #5a52e0; }
+
+  .btn-secondary {
+    background: var(--surface3);
+    color: var(--text);
+    border: 1px solid var(--border);
+  }
+  .btn-secondary:hover { background: var(--surface2); }
+
+  .btn-success {
+    background: rgba(105, 219, 124, 0.15);
+    color: var(--success);
+    border: 1px solid rgba(105, 219, 124, 0.3);
+  }
+  .btn-success:hover { background: rgba(105, 219, 124, 0.25); }
+
+  .btn-sm {
+    padding: 4px 10px;
+    font-size: 12px;
+  }
+
+  /* メインレイアウト */
+  .main {
+    display: grid;
+    grid-template-columns: 280px 1fr;
+    height: calc(100vh - 61px);
+  }
+
+  /* サイドバー */
+  .sidebar {
+    background: var(--surface);
+    border-right: 1px solid var(--border);
+    overflow-y: auto;
+    padding: 16px;
+  }
+
+  .sidebar-section {
+    margin-bottom: 24px;
+  }
+
+  .sidebar-label {
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    color: var(--text3);
+    text-transform: uppercase;
+    margin-bottom: 8px;
+    padding: 0 4px;
+  }
+
+  .filter-btn {
+    width: 100%;
+    text-align: left;
+    padding: 8px 12px;
+    border-radius: 8px;
+    border: none;
+    background: transparent;
+    color: var(--text2);
+    cursor: pointer;
+    font-size: 13px;
+    font-family: 'Noto Sans JP', sans-serif;
+    transition: all 0.15s;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 2px;
+  }
+
+  .filter-btn:hover { background: var(--surface3); color: var(--text); }
+  .filter-btn.active { background: rgba(108, 99, 255, 0.15); color: var(--accent); }
+
+  .filter-count {
+    font-size: 11px;
+    font-family: 'DM Mono', monospace;
+    background: var(--surface3);
+    padding: 2px 6px;
+    border-radius: 10px;
+  }
+
+  /* 統計カード */
+  .stats {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+    margin-bottom: 16px;
+  }
+
+  .stat-card {
+    background: var(--surface3);
+    border-radius: 10px;
+    padding: 12px;
+    text-align: center;
+  }
+
+  .stat-num {
+    font-size: 24px;
+    font-weight: 700;
+    font-family: 'DM Mono', monospace;
+  }
+
+  .stat-label {
+    font-size: 11px;
+    color: var(--text3);
+    margin-top: 2px;
+  }
+
+  /* コンテンツエリア */
+  .content {
+    overflow-y: auto;
+    padding: 20px 24px;
+  }
+
+  .content-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 16px;
+  }
+
+  .content-title {
+    font-size: 18px;
+    font-weight: 700;
+  }
+
+  .content-actions {
+    display: flex;
+    gap: 8px;
+  }
+
+  /* タスクカード */
+  .task-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    margin-bottom: 10px;
+    overflow: hidden;
+    transition: border-color 0.15s, box-shadow 0.15s;
+  }
+
+  .task-card:hover {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 1px rgba(108, 99, 255, 0.2);
+  }
+
+  .task-card.expanded { border-color: var(--accent); }
+
+  .task-card-header {
+    padding: 14px 16px;
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    cursor: pointer;
+  }
+
+  .task-priority-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    margin-top: 6px;
+    flex-shrink: 0;
+  }
+
+  .task-priority-high { background: var(--danger); box-shadow: 0 0 6px var(--danger); }
+  .task-priority-mid { background: var(--warn); }
+  .task-priority-low { background: var(--text3); }
+  .task-priority-alert { background: var(--warn); box-shadow: 0 0 8px var(--warn); animation: pulse 1.5s infinite; }
+
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.4; }
+  }
+
+  .task-main {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .task-name {
+    font-size: 14px;
+    font-weight: 500;
+    margin-bottom: 6px;
+    line-height: 1.4;
+  }
+
+  .task-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    align-items: center;
+  }
+
+  .badge {
+    font-size: 11px;
+    padding: 2px 8px;
+    border-radius: 6px;
+    font-weight: 500;
+    white-space: nowrap;
+  }
+
+  .badge-status-未着手 { background: rgba(144,144,168,0.15); color: var(--text2); }
+  .badge-status-進行中 { background: rgba(116,192,252,0.15); color: var(--blue); }
+  .badge-status-完了 { background: rgba(105,219,124,0.15); color: var(--success); }
+  .badge-status-保留 { background: rgba(255,165,0,0.12); color: var(--warn); }
+  .badge-status-アラート { background: rgba(255,107,107,0.15); color: var(--danger); }
+
+  .badge-source {
+    background: rgba(108,99,255,0.1);
+    color: var(--accent);
+    border: 1px solid rgba(108,99,255,0.2);
+  }
+
+  .badge-deadline {
+    background: rgba(255,107,107,0.1);
+    color: var(--danger);
+    font-family: 'DM Mono', monospace;
+  }
+
+  .badge-deadline-ok {
+    background: rgba(144,144,168,0.1);
+    color: var(--text3);
+    font-family: 'DM Mono', monospace;
+  }
+
+  .task-expand-btn {
+    width: 24px;
+    height: 24px;
+    border-radius: 6px;
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    color: var(--text3);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    transition: all 0.15s;
+    font-size: 16px;
+  }
+
+  .task-expand-btn:hover { background: var(--surface3); color: var(--text); }
+
+  /* タスク詳細 */
+  .task-detail {
+    padding: 0 16px 16px 36px;
+    display: none;
+    border-top: 1px solid var(--border);
+    padding-top: 14px;
+    margin-top: 0;
+  }
+
+  .task-detail.open { display: block; }
+
+  .detail-row {
+    display: grid;
+    grid-template-columns: 100px 1fr;
+    gap: 8px;
+    margin-bottom: 12px;
+    align-items: start;
+  }
+
+  .detail-label {
+    font-size: 12px;
+    color: var(--text3);
+    font-weight: 500;
+    padding-top: 2px;
+  }
+
+  .detail-value {
+    font-size: 13px;
+  }
+
+  /* ステータス選択 */
+  .status-select {
+    background: var(--surface3);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    color: var(--text);
+    padding: 6px 10px;
+    font-size: 13px;
+    font-family: 'Noto Sans JP', sans-serif;
+    cursor: pointer;
+    outline: none;
+    min-width: 140px;
+  }
+
+  .status-select:focus { border-color: var(--accent); }
+
+  /* メモ入力 */
+  .memo-input {
+    width: 100%;
+    background: var(--surface3);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    color: var(--text);
+    padding: 8px 12px;
+    font-size: 13px;
+    font-family: 'Noto Sans JP', sans-serif;
+    resize: vertical;
+    min-height: 60px;
+    outline: none;
+    line-height: 1.6;
+  }
+
+  .memo-input:focus { border-color: var(--accent); }
+  .memo-input::placeholder { color: var(--text3); }
+
+  .detail-actions {
+    display: flex;
+    gap: 8px;
+    margin-top: 12px;
+    justify-content: flex-end;
+  }
+
+  /* Notion同期ボタン */
+  .notion-sync-btn {
+    background: rgba(78, 204, 163, 0.1);
+    color: var(--accent2);
+    border: 1px solid rgba(78, 204, 163, 0.3);
+    padding: 6px 14px;
+    border-radius: 8px;
+    font-size: 12px;
+    cursor: pointer;
+    font-family: 'Noto Sans JP', sans-serif;
+    transition: all 0.15s;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .notion-sync-btn:hover { background: rgba(78, 204, 163, 0.2); }
+  .notion-sync-btn.syncing { opacity: 0.6; cursor: not-allowed; }
+  .notion-sync-btn.synced { background: rgba(105, 219, 124, 0.1); color: var(--success); border-color: rgba(105, 219, 124, 0.3); }
+
+  /* トースト */
+  .toast-container {
+    position: fixed;
+    bottom: 24px;
+    right: 24px;
+    z-index: 1000;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .toast {
+    background: var(--surface3);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 12px 16px;
+    font-size: 13px;
+    min-width: 240px;
+    animation: slideIn 0.2s ease;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.4);
+  }
+
+  .toast.success { border-color: rgba(105, 219, 124, 0.4); }
+  .toast.error { border-color: rgba(255, 107, 107, 0.4); }
+
+  @keyframes slideIn {
+    from { transform: translateX(100%); opacity: 0; }
+    to { transform: translateX(0); opacity: 1; }
+  }
+
+  /* モーダル */
+  .modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.7);
+    z-index: 200;
+    display: none;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .modal-overlay.open { display: flex; }
+
+  .modal {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 24px;
+    width: 520px;
+    max-height: 80vh;
+    overflow-y: auto;
+    box-shadow: 0 8px 40px rgba(0,0,0,0.6);
+  }
+
+  .modal-title {
+    font-size: 16px;
+    font-weight: 700;
+    margin-bottom: 20px;
+  }
+
+  .form-group {
+    margin-bottom: 16px;
+  }
+
+  .form-label {
+    font-size: 12px;
+    color: var(--text3);
+    font-weight: 500;
+    margin-bottom: 6px;
+    display: block;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+  }
+
+  .form-input {
+    width: 100%;
+    background: var(--surface3);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    color: var(--text);
+    padding: 8px 12px;
+    font-size: 13px;
+    font-family: 'Noto Sans JP', sans-serif;
+    outline: none;
+  }
+
+  .form-input:focus { border-color: var(--accent); }
+
+  .form-select {
+    width: 100%;
+    background: var(--surface3);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    color: var(--text);
+    padding: 8px 12px;
+    font-size: 13px;
+    font-family: 'Noto Sans JP', sans-serif;
+    cursor: pointer;
+    outline: none;
+  }
+
+  .form-textarea {
+    width: 100%;
+    background: var(--surface3);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    color: var(--text);
+    padding: 8px 12px;
+    font-size: 13px;
+    font-family: 'Noto Sans JP', sans-serif;
+    resize: vertical;
+    min-height: 80px;
+    outline: none;
+    line-height: 1.6;
+  }
+
+  .form-textarea:focus, .form-select:focus { border-color: var(--accent); }
+
+  .modal-actions {
+    display: flex;
+    gap: 8px;
+    justify-content: flex-end;
+    margin-top: 20px;
+  }
+
+  /* 議事録リスト */
+  .minutes-list {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .minutes-item {
+    background: var(--surface3);
+    border-radius: 8px;
+    padding: 8px 12px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font-size: 12px;
+  }
+
+  .minutes-item-title { flex: 1; }
+  .minutes-item-date {
+    color: var(--text3);
+    font-family: 'DM Mono', monospace;
+    margin: 0 12px;
+    white-space: nowrap;
+  }
+
+  /* タブ */
+  .tabs {
+    display: flex;
+    gap: 2px;
+    background: var(--surface3);
+    padding: 3px;
+    border-radius: 10px;
+    margin-bottom: 20px;
+  }
+
+  .tab {
+    flex: 1;
+    padding: 8px 12px;
+    border-radius: 8px;
+    border: none;
+    background: transparent;
+    color: var(--text2);
+    cursor: pointer;
+    font-size: 13px;
+    font-family: 'Noto Sans JP', sans-serif;
+    font-weight: 500;
+    transition: all 0.15s;
+    text-align: center;
+  }
+
+  .tab.active {
+    background: var(--surface);
+    color: var(--text);
+    box-shadow: 0 1px 4px rgba(0,0,0,0.3);
+  }
+
+  .tab-content { display: none; }
+  .tab-content.active { display: block; }
+
+  /* アラートバナー */
+  .alert-banner {
+    background: rgba(255, 107, 107, 0.08);
+    border: 1px solid rgba(255, 107, 107, 0.25);
+    border-radius: 10px;
+    padding: 12px 16px;
+    margin-bottom: 16px;
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+  }
+
+  .alert-banner-icon { font-size: 16px; flex-shrink: 0; margin-top: 1px; }
+  .alert-banner-text { font-size: 13px; }
+  .alert-banner-title { font-weight: 700; color: var(--danger); margin-bottom: 4px; }
+
+  /* スクロールバー */
+  ::-webkit-scrollbar { width: 6px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
+  .notion-token-input {
+    background: var(--surface3);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    color: var(--text);
+    padding: 6px 10px;
+    font-size: 12px;
+    font-family: 'DM Mono', monospace;
+    width: 100%;
+    outline: none;
+  }
+
+  .notion-token-input:focus { border-color: var(--accent); }
+
+  .settings-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 8px;
+  }
+
+  .dot-alert { animation: pulse 1.5s infinite; }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div class="header-left">
+    <div class="header-icon">📋</div>
+    <div>
+      <div class="header-title">楠元 タスク管理</div>
+      <div class="header-sub">PBGH Task Dashboard</div>
+    </div>
+  </div>
+  <div class="header-right">
+    <button class="btn btn-secondary btn-sm" onclick="openMinutesModal()">📄 議事録追加</button>
+    <button class="btn btn-primary btn-sm" onclick="openAddTaskModal()">＋ タスク追加</button>
+    <button class="btn btn-success btn-sm" onclick="syncAllToNotion()">🔄 Notion全同期</button>
+  </div>
+</div>
+
+<div class="main">
+  <!-- サイドバー -->
+  <div class="sidebar">
+    <div class="sidebar-section">
+      <div class="stats">
+        <div class="stat-card">
+          <div class="stat-num" id="stat-total" style="color: var(--accent)">0</div>
+          <div class="stat-label">総タスク</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-num" id="stat-inprogress" style="color: var(--blue)">0</div>
+          <div class="stat-label">進行中</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-num" id="stat-alert" style="color: var(--danger)">0</div>
+          <div class="stat-label">アラート</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-num" id="stat-done" style="color: var(--success)">0</div>
+          <div class="stat-label">完了</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="sidebar-section">
+      <div class="sidebar-label">フィルター</div>
+      <button class="filter-btn active" onclick="setFilter('all', this)">
+        <span>すべて</span>
+        <span class="filter-count" id="fc-all">0</span>
+      </button>
+      <button class="filter-btn" onclick="setFilter('アラート', this)">
+        <span>⚠️ アラート</span>
+        <span class="filter-count" id="fc-alert">0</span>
+      </button>
+      <button class="filter-btn" onclick="setFilter('未着手', this)">
+        <span>未着手</span>
+        <span class="filter-count" id="fc-todo">0</span>
+      </button>
+      <button class="filter-btn" onclick="setFilter('進行中', this)">
+        <span>進行中</span>
+        <span class="filter-count" id="fc-inprogress">0</span>
+      </button>
+      <button class="filter-btn" onclick="setFilter('完了', this)">
+        <span>✅ 完了</span>
+        <span class="filter-count" id="fc-done">0</span>
+      </button>
+      <button class="filter-btn" onclick="setFilter('保留', this)">
+        <span>保留</span>
+        <span class="filter-count" id="fc-hold">0</span>
+      </button>
+    </div>
+
+    <div class="sidebar-section">
+      <div class="sidebar-label">領域</div>
+      <button class="filter-btn" onclick="setFilter('domain:プロダクト', this)">プロダクト</button>
+      <button class="filter-btn" onclick="setFilter('domain:PBGH', this)">PBGH</button>
+      <button class="filter-btn" onclick="setFilter('domain:総務', this)">総務</button>
+      <button class="filter-btn" onclick="setFilter('domain:unique', this)">unique</button>
+    </div>
+
+    <div class="sidebar-section">
+      <div class="sidebar-label">Notion設定</div>
+      <div style="padding: 4px;">
+        <div style="font-size: 11px; color: var(--text3); margin-bottom: 6px;">Notion Token</div>
+        <input type="password" class="notion-token-input" id="notion-token" placeholder="ntn_..." oninput="saveToken()">
+        <div style="font-size: 11px; color: var(--text3); margin-top: 6px;" id="token-status">未設定</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- コンテンツ -->
+  <div class="content">
+    <div class="tabs">
+      <button class="tab active" onclick="switchTab('tasks', this)">タスク一覧</button>
+      <button class="tab" onclick="switchTab('minutes', this)">確認済み議事録</button>
+    </div>
+
+    <!-- タスク一覧タブ -->
+    <div id="tab-tasks" class="tab-content active">
+      <div id="alert-section"></div>
+      <div class="content-header">
+        <div class="content-title" id="filter-label">すべてのタスク</div>
+        <div class="content-actions">
+          <input type="text" style="background: var(--surface3); border: 1px solid var(--border); border-radius: 8px; color: var(--text); padding: 6px 12px; font-size: 13px; font-family: inherit; outline: none; width: 200px;" placeholder="タスク検索..." id="search-input" oninput="renderTasks()">
+        </div>
+      </div>
+      <div id="task-list"></div>
+    </div>
+
+    <!-- 議事録タブ -->
+    <div id="tab-minutes" class="tab-content">
+      <div class="content-header">
+        <div class="content-title">確認済み議事録</div>
+        <button class="btn btn-secondary btn-sm" onclick="openMinutesModal()">＋ 追加</button>
+      </div>
+      <div id="minutes-list"></div>
+    </div>
+  </div>
+</div>
+
+<!-- タスク追加モーダル -->
+<div class="modal-overlay" id="add-task-modal">
+  <div class="modal">
+    <div class="modal-title">タスク追加</div>
+    <div class="form-group">
+      <label class="form-label">タスク名 *</label>
+      <input type="text" class="form-input" id="new-task-name" placeholder="タスク内容を入力">
+    </div>
+    <div class="form-group">
+      <label class="form-label">出典（議事録名）</label>
+      <input type="text" class="form-input" id="new-task-source" placeholder="例: プロダクト定例（5/19）">
+    </div>
+    <div class="form-group">
+      <label class="form-label">期日</label>
+      <input type="date" class="form-input" id="new-task-deadline">
+    </div>
+    <div class="form-group">
+      <label class="form-label">ステータス</label>
+      <select class="form-select" id="new-task-status">
+        <option value="未着手">未着手</option>
+        <option value="進行中">進行中</option>
+        <option value="アラート">アラート</option>
+        <option value="保留">保留</option>
+      </select>
+    </div>
+    <div class="form-group">
+      <label class="form-label">優先度</label>
+      <select class="form-select" id="new-task-priority">
+        <option value="高">高</option>
+        <option value="中">中</option>
+        <option value="低">低</option>
+      </select>
+    </div>
+    <div class="form-group">
+      <label class="form-label">領域</label>
+      <select class="form-select" id="new-task-domain">
+        <option value="プロダクト">プロダクト</option>
+        <option value="PBGH">PBGH</option>
+        <option value="総務">総務</option>
+        <option value="unique">unique</option>
+        <option value="AITOKYO">AITOKYO</option>
+      </select>
+    </div>
+    <div class="form-group">
+      <label class="form-label">備考</label>
+      <textarea class="form-textarea" id="new-task-note" placeholder="備考・メモ"></textarea>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-secondary" onclick="closeModal('add-task-modal')">キャンセル</button>
+      <button class="btn btn-primary" onclick="addTask()">追加</button>
+    </div>
+  </div>
+</div>
+
+<!-- 議事録追加モーダル -->
+<div class="modal-overlay" id="minutes-modal">
+  <div class="modal">
+    <div class="modal-title">議事録追加</div>
+    <div class="form-group">
+      <label class="form-label">議事録名 *</label>
+      <input type="text" class="form-input" id="new-minutes-title" placeholder="例: 【役員】プロダクト定例（2026/05/26）">
+    </div>
+    <div class="form-group">
+      <label class="form-label">実施日 *</label>
+      <input type="date" class="form-input" id="new-minutes-date">
+    </div>
+    <div class="form-group">
+      <label class="form-label">NotionページURL</label>
+      <input type="text" class="form-input" id="new-minutes-url" placeholder="https://notion.so/...">
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-secondary" onclick="closeModal('minutes-modal')">キャンセル</button>
+      <button class="btn btn-primary" onclick="addMinutes()">追加</button>
+    </div>
+  </div>
+</div>
+
+<!-- トースト -->
+<div class="toast-container" id="toast-container"></div>
+
+<script>
+// ========================================
+// データ定義
+// ========================================
+
+const NOTION_DB_ID = '2a5a452b-1aab-80d9-8bb0-000bd9b797d4';
+const KUSUMOTO_USER_ID = '34dd872b-594c-814e-b814-00022734dcdc';
+
+let currentFilter = 'all';
+
+const initialTasks = [
+  // アラート
+  { id: 'a1', name: 'AITOKYOサロン内装是正工事：旗振り役として進行・是正グループ作成', source: 'unique定例（5/15）', deadline: '', status: 'アラート', priority: '高', domain: 'unique', note: '中島翼からクレーム報告あり。グループライン作成も含む', notionId: null },
+  { id: 'a2', name: 'サロン向けECサイト（BM内）：方向性決定・打診', source: 'プロダクト定例（5/19）', deadline: '', status: 'アラート', priority: '高', domain: 'プロダクト', note: '5/15ローンチ目標を超過済み。翼から商品選定回収済み', notionId: null },
+  { id: 'a3', name: 'メイカさん内定通知書・雇用条件通知書の作成・送付', source: '楠元×橋本MTG（4/6）', deadline: '', status: 'アラート', priority: '高', domain: '総務', note: '橋本から依頼。完了確認必要', notionId: null },
+  { id: 'a4', name: 'BMタグマネ覚書の提出', source: '楠元×橋本MTG（4/6）', deadline: '', status: 'アラート', priority: '中', domain: '総務', note: '橋本から依頼。完了確認必要', notionId: null },
+  { id: 'a5', name: 'Notion/Slack権限分離の方針案作成（橋本と相談の上展開）', source: '不動産定例（4/30）', deadline: '', status: 'アラート', priority: '中', domain: 'PBGH', note: '5/7期限超過。退職時アクセス不能リスク対策', notionId: null },
+  { id: 'a6', name: '梱包方式の写真・現物情報回収（ヴィタリスLINE・池田自宅在庫確認）', source: 'プロダクト定例（4/19）', deadline: '', status: 'アラート', priority: '中', domain: 'プロダクト', note: '旧AIme段ボール活用可否案も含む', notionId: null },
+  // 通常タスク
+  { id: 't1', name: 'AImeローンチイベント（7/10）：松舘・中島翼の7/10スケジュール確保', source: 'プロダクト定例（5/19）', deadline: '2026-05-25', status: '未着手', priority: '高', domain: 'プロダクト', note: '明示的に楠元が担当指名', notionId: null },
+  { id: 't2', name: 'AIme Shopify：デモページのデザインをShopifyで再現（Prestigeテーマ）', source: '総務定例・AImeサイトMTG（5/14・5/19）', deadline: '2026-06-01', status: '進行中', priority: '高', domain: 'プロダクト', note: '鎌形と共同進行。池田がサポート。水木金で作業', notionId: null },
+  { id: 't3', name: 'AIme 現サイト更新（トップページから1セクションずつ実装）', source: 'プロダクト定例（5/7・5/19）', deadline: '2026-06-15', status: '進行中', priority: '高', domain: 'プロダクト', note: 'あかねさん提供素材使用', notionId: null },
+  { id: 't4', name: 'AImeローンチイベント：イベント概要・インフルエンサー候補を西村あかねから収集・5月末に橋本へ共有', source: 'プロダクト定例（5/7）', deadline: '2026-05-31', status: '進行中', priority: '高', domain: 'プロダクト', note: '橋本と共同', notionId: null },
+  { id: 't5', name: 'AImeローンチイベント：支払いフロー・予算50万を鎌形と確認し周知', source: 'プロダクト定例（5/7）', deadline: '2026-05-31', status: '未着手', priority: '中', domain: 'プロダクト', note: '橋本と共同', notionId: null },
+  { id: 't6', name: 'AImeローンチイベント：動画編集・LP・声かけリスト進行管理', source: 'プロダクト定例（5/7）', deadline: '', status: '進行中', priority: '中', domain: 'プロダクト', note: '橋本と共同', notionId: null },
+  { id: 't7', name: 'AImeローンチイベント：池田と撮影物・素材の進行管理', source: 'プロダクト定例（5/7）', deadline: '', status: '進行中', priority: '中', domain: 'プロダクト', note: '橋本と共同', notionId: null },
+  { id: 't8', name: 'AImeローンチイベント：予算50万の関係者との認識合わせ・管理', source: 'プロダクト定例（5/7）', deadline: '', status: '未着手', priority: '中', domain: 'プロダクト', note: '橋本と共同', notionId: null },
+  { id: 't9', name: 'Gitワークスペース設定・デプロイ権限整理（楠元・橋本・向井・尾形のみ）', source: 'HD役員定例（5/8）', deadline: '', status: '未着手', priority: '中', domain: 'PBGH', note: '宮崎CTOが主導', notionId: null },
+  { id: 't10', name: '店舗開発案件用Notionページひな形作成（マムズタッチ向け）', source: '不動産定例（4/30）', deadline: '', status: '未着手', priority: '低', domain: '総務', note: '将来的にオプション月額化も検討', notionId: null },
+  { id: 't11', name: 'AIme事業計画：配送料・倉庫費・ダンボール費等の正確な見積もり取得', source: 'プロダクト定例（4/19）', deadline: '', status: '未着手', priority: '中', domain: 'プロダクト', note: '鎌形から依頼。銀行持込資料に必要', notionId: null },
+  { id: 't12', name: 'Shopify微調整（池田と連携）', source: 'プロダクト定例（4/19）', deadline: '2026-06-15', status: '進行中', priority: '中', domain: 'プロダクト', note: '池田がメイン・楠元がサポート', notionId: null },
+  { id: 't13', name: 'LS顧問先のNotion PJ管理ページ運用継続', source: 'HD本社会議（3/30）', deadline: '', status: '進行中', priority: '低', domain: '総務', note: '向井が財務・契約担当', notionId: null },
+  { id: 't14', name: 'AIXリスキリング入金確認（+200万）', source: 'HD役員定例（4/30）', deadline: '2026-05-31', status: '未着手', priority: '中', domain: 'PBGH', note: '向井が管理', notionId: null },
+];
+
+const initialMinutes = [
+  { title: '🧾 HD本社会議（2026/03/30）', date: '2026-03-30', url: '' },
+  { title: '楠元×橋本さんMTG', date: '2026-04-06', url: '' },
+  { title: '【役員】プロダクト定例（2026/04/09）', date: '2026-04-09', url: '' },
+  { title: '【役員】プロダクト定例（2026/04/19）', date: '2026-04-19', url: '' },
+  { title: '27卒採用 優先施策・強化戦略まとめ', date: '2026-04-20', url: '' },
+  { title: '【役員】サロン会議（2026/04/23）', date: '2026-04-23', url: '' },
+  { title: '【役員】unique 定例（2026/04/24）', date: '2026-04-24', url: '' },
+  { title: '🧾 HD役員定例会議（2026/04/24）', date: '2026-04-24', url: '' },
+  { title: '【役員】プロダクト定例（2026/04/25）', date: '2026-04-25', url: '' },
+  { title: '🏗️ unique中長期組織構想 壁打ちアジェンダ', date: '2026-04-29', url: '' },
+  { title: '🧾 HD役員定例会議（2026/04/30）', date: '2026-04-30', url: '' },
+  { title: '【役員】サロン会議（2026/04/30）', date: '2026-04-30', url: '' },
+  { title: '🧾 【全体】HD全体会議 2026/05/01', date: '2026-05-01', url: '' },
+  { title: '【役員】プロダクト定例（2026/05/07）', date: '2026-05-07', url: '' },
+  { title: '【役員】unique 定例（2026/05/07）', date: '2026-05-07', url: '' },
+  { title: '【役員】サロン会議（2026/05/07）', date: '2026-05-07', url: '' },
+  { title: '🧾 HD役員定例会議（2026/05/08）', date: '2026-05-08', url: '' },
+  { title: 'AIme サイト構築MTG', date: '2026-05-14', url: '' },
+  { title: '【役員】サロン会議（2026/05/14）', date: '2026-05-14', url: '' },
+  { title: '【役員】unique 定例（2026/05/15）', date: '2026-05-15', url: '' },
+  { title: '【定例】ams MTG', date: '2026-05-16', url: '' },
+  { title: '【株式会社LS】議事録', date: '2026-05-18', url: '' },
+  { title: '【役員】プロダクト定例（2026/05/19）', date: '2026-05-19', url: '' },
+  { title: '【役員】総務定例', date: '2026-05-19', url: '' },
+];
+
+// ========================================
+// ストレージ
+// ========================================
+function loadData() {
+  const saved = localStorage.getItem('kusumoto-tasks');
+  return saved ? JSON.parse(saved) : initialTasks;
+}
+
+function loadMinutes() {
+  const saved = localStorage.getItem('kusumoto-minutes');
+  return saved ? JSON.parse(saved) : initialMinutes;
+}
+
+function saveData() {
+  localStorage.setItem('kusumoto-tasks', JSON.stringify(tasks));
+}
+
+function saveMinutesData() {
+  localStorage.setItem('kusumoto-minutes', JSON.stringify(minutes));
+}
+
+function saveToken() {
+  const token = document.getElementById('notion-token').value;
+  localStorage.setItem('notion-token', token);
+  document.getElementById('token-status').textContent = token ? '✅ 設定済み' : '未設定';
+}
+
+function loadToken() {
+  const token = localStorage.getItem('notion-token') || '';
+  document.getElementById('notion-token').value = token;
+  document.getElementById('token-status').textContent = token ? '✅ 設定済み' : '未設定';
+  return token;
+}
+
+let tasks = loadData();
+let minutes = loadMinutes();
+
+// ========================================
+// レンダリング
+// ========================================
+function renderTasks() {
+  const list = document.getElementById('task-list');
+  const searchVal = document.getElementById('search-input').value.toLowerCase();
+
+  let filtered = tasks.filter(t => {
+    if (searchVal && !t.name.toLowerCase().includes(searchVal) && !t.source.toLowerCase().includes(searchVal)) return false;
+    if (currentFilter === 'all') return t.status !== '完了';
+    if (currentFilter.startsWith('domain:')) return t.domain === currentFilter.replace('domain:', '');
+    return t.status === currentFilter;
+  });
+
+  // アラートを上に
+  filtered.sort((a, b) => {
+    const order = { 'アラート': 0, '未着手': 1, '進行中': 2, '保留': 3, '完了': 4 };
+    return (order[a.status] || 5) - (order[b.status] || 5);
+  });
+
+  // アラートバナー
+  const alertSection = document.getElementById('alert-section');
+  const alertTasks = tasks.filter(t => t.status === 'アラート');
+  if (alertTasks.length > 0 && (currentFilter === 'all' || currentFilter === 'アラート')) {
+    alertSection.innerHTML = `
+      <div class="alert-banner">
+        <div class="alert-banner-icon">⚠️</div>
+        <div class="alert-banner-text">
+          <div class="alert-banner-title">要対応アラート ${alertTasks.length}件</div>
+          <div style="color: var(--text2); font-size: 12px;">${alertTasks.map(t => t.name.substring(0, 30) + '...').join('　•　')}</div>
+        </div>
+      </div>
+    `;
+  } else {
+    alertSection.innerHTML = '';
+  }
+
+  list.innerHTML = filtered.map(task => `
+    <div class="task-card ${task._expanded ? 'expanded' : ''}" id="card-${task.id}">
+      <div class="task-card-header" onclick="toggleExpand('${task.id}')">
+        <div class="task-priority-dot task-priority-${task.status === 'アラート' ? 'alert' : task.priority === '高' ? 'high' : task.priority === '中' ? 'mid' : 'low'}"></div>
+        <div class="task-main">
+          <div class="task-name">${task.name}</div>
+          <div class="task-meta">
+            <span class="badge badge-status-${task.status}">${task.status}</span>
+            <span class="badge badge-source">${task.source}</span>
+            ${task.deadline ? `<span class="badge ${isOverdue(task.deadline) ? 'badge-deadline' : 'badge-deadline-ok'}">${task.deadline}${isOverdue(task.deadline) ? ' ⚠️' : ''}</span>` : ''}
+            ${task.notionId ? '<span class="badge" style="background: rgba(78,204,163,0.1); color: var(--accent2); border: 1px solid rgba(78,204,163,0.2);">Notion✓</span>' : ''}
+          </div>
+        </div>
+        <button class="task-expand-btn">${task._expanded ? '▲' : '▼'}</button>
+      </div>
+      <div class="task-detail ${task._expanded ? 'open' : ''}" id="detail-${task.id}">
+        <div class="detail-row">
+          <div class="detail-label">ステータス</div>
+          <div>
+            <select class="status-select" onchange="updateStatus('${task.id}', this.value)">
+              <option ${task.status === '未着手' ? 'selected' : ''}>未着手</option>
+              <option ${task.status === '進行中' ? 'selected' : ''}>進行中</option>
+              <option ${task.status === 'アラート' ? 'selected' : ''}>アラート</option>
+              <option ${task.status === '保留' ? 'selected' : ''}>保留</option>
+              <option ${task.status === '完了' ? 'selected' : ''}>完了</option>
+            </select>
+          </div>
+        </div>
+        <div class="detail-row">
+          <div class="detail-label">備考・メモ</div>
+          <div>
+            <textarea class="memo-input" id="memo-${task.id}" placeholder="進捗メモを入力...">${task.note || ''}</textarea>
+          </div>
+        </div>
+        ${task.deadline ? `<div class="detail-row"><div class="detail-label">期日</div><div class="detail-value">${task.deadline}</div></div>` : ''}
+        <div class="detail-row">
+          <div class="detail-label">領域</div>
+          <div class="detail-value">${task.domain}</div>
+        </div>
+        <div class="detail-actions">
+          <button class="btn btn-secondary btn-sm" onclick="saveMemo('${task.id}')">💾 メモ保存</button>
+          <button class="notion-sync-btn btn-sm ${task.notionId ? 'synced' : ''}" id="sync-btn-${task.id}" onclick="syncTaskToNotion('${task.id}')">
+            ${task.notionId ? '✅ Notion同期済み' : '🔄 Notionに登録'}
+          </button>
+        </div>
+      </div>
+    </div>
+  `).join('');
+
+  updateStats();
+  updateFilterCounts();
+}
+
+function isOverdue(deadline) {
+  if (!deadline) return false;
+  return new Date(deadline) < new Date();
+}
+
+function toggleExpand(id) {
+  const task = tasks.find(t => t.id === id);
+  if (task) {
+    task._expanded = !task._expanded;
+    renderTasks();
+  }
+}
+
+function updateStatus(id, status) {
+  const task = tasks.find(t => t.id === id);
+  if (task) {
+    task.status = status;
+    saveData();
+    renderTasks();
+    toast(`ステータスを「${status}」に更新しました`, 'success');
+  }
+}
+
+function saveMemo(id) {
+  const task = tasks.find(t => t.id === id);
+  const memo = document.getElementById(`memo-${id}`).value;
+  if (task) {
+    task.note = memo;
+    saveData();
+    toast('メモを保存しました', 'success');
+  }
+}
+
+function updateStats() {
+  document.getElementById('stat-total').textContent = tasks.filter(t => t.status !== '完了').length;
+  document.getElementById('stat-inprogress').textContent = tasks.filter(t => t.status === '進行中').length;
+  document.getElementById('stat-alert').textContent = tasks.filter(t => t.status === 'アラート').length;
+  document.getElementById('stat-done').textContent = tasks.filter(t => t.status === '完了').length;
+}
+
+function updateFilterCounts() {
+  document.getElementById('fc-all').textContent = tasks.filter(t => t.status !== '完了').length;
+  document.getElementById('fc-alert').textContent = tasks.filter(t => t.status === 'アラート').length;
+  document.getElementById('fc-todo').textContent = tasks.filter(t => t.status === '未着手').length;
+  document.getElementById('fc-inprogress').textContent = tasks.filter(t => t.status === '進行中').length;
+  document.getElementById('fc-done').textContent = tasks.filter(t => t.status === '完了').length;
+  document.getElementById('fc-hold').textContent = tasks.filter(t => t.status === '保留').length;
+}
+
+function renderMinutes() {
+  const list = document.getElementById('minutes-list');
+  const sorted = [...minutes].sort((a, b) => new Date(b.date) - new Date(a.date));
+  list.innerHTML = `
+    <div class="minutes-list">
+      ${sorted.map((m, i) => `
+        <div class="minutes-item">
+          <div class="minutes-item-title">${m.title}</div>
+          <div class="minutes-item-date">${m.date}</div>
+          ${m.url ? `<a href="${m.url}" target="_blank" style="font-size: 11px; color: var(--accent); text-decoration: none;">Notion↗</a>` : ''}
+          <button onclick="deleteMinutes(${i})" style="background: none; border: none; cursor: pointer; color: var(--text3); font-size: 14px; margin-left: 8px;">×</button>
+        </div>
+      `).join('')}
+    </div>
+  `;
+}
+
+// ========================================
+// フィルター・タブ
+// ========================================
+function setFilter(filter, btn) {
+  currentFilter = filter;
+  document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  const labels = {
+    all: 'すべてのタスク', 'アラート': '⚠️ アラート', '未着手': '未着手', '進行中': '進行中', '完了': '✅ 完了', '保留': '保留',
+    'domain:プロダクト': 'プロダクト', 'domain:PBGH': 'PBGH', 'domain:総務': '総務', 'domain:unique': 'unique'
+  };
+  document.getElementById('filter-label').textContent = labels[filter] || filter;
+  renderTasks();
+}
+
+function switchTab(tab, btn) {
+  document.querySelectorAll('.tab').forEach(b => b.classList.remove('active'));
+  document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+  btn.classList.add('active');
+  document.getElementById(`tab-${tab}`).classList.add('active');
+  if (tab === 'minutes') renderMinutes();
+}
+
+// ========================================
+// タスク追加
+// ========================================
+function openAddTaskModal() {
+  document.getElementById('add-task-modal').classList.add('open');
+}
+
+function addTask() {
+  const name = document.getElementById('new-task-name').value.trim();
+  if (!name) { toast('タスク名を入力してください', 'error'); return; }
+
+  const newTask = {
+    id: 't' + Date.now(),
+    name,
+    source: document.getElementById('new-task-source').value,
+    deadline: document.getElementById('new-task-deadline').value,
+    status: document.getElementById('new-task-status').value,
+    priority: document.getElementById('new-task-priority').value,
+    domain: document.getElementById('new-task-domain').value,
+    note: document.getElementById('new-task-note').value,
+    notionId: null
+  };
+
+  tasks.unshift(newTask);
+  saveData();
+  closeModal('add-task-modal');
+  renderTasks();
+  toast('タスクを追加しました', 'success');
+
+  // フォームリセット
+  ['new-task-name', 'new-task-source', 'new-task-deadline', 'new-task-note'].forEach(id => {
+    document.getElementById(id).value = '';
+  });
+}
+
+// ========================================
+// 議事録追加
+// ========================================
+function openMinutesModal() {
+  document.getElementById('minutes-modal').classList.add('open');
+}
+
+function addMinutes() {
+  const title = document.getElementById('new-minutes-title').value.trim();
+  const date = document.getElementById('new-minutes-date').value;
+  if (!title || !date) { toast('議事録名と日付を入力してください', 'error'); return; }
+
+  minutes.unshift({
+    title,
+    date,
+    url: document.getElementById('new-minutes-url').value
+  });
+  saveMinutesData();
+  closeModal('minutes-modal');
+  renderMinutes();
+  toast('議事録を追加しました', 'success');
+
+  ['new-minutes-title', 'new-minutes-date', 'new-minutes-url'].forEach(id => {
+    document.getElementById(id).value = '';
+  });
+}
+
+function deleteMinutes(index) {
+  minutes.splice(index, 1);
+  saveMinutesData();
+  renderMinutes();
+  toast('議事録を削除しました', 'success');
+}
+
+// ========================================
+// Notion同期
+// ========================================
+function getToken() {
+  return localStorage.getItem('notion-token') || '';
+}
+
+const STATUS_MAP = {
+  '未着手': '未着手',
+  '進行中': '進行中',
+  'アラート': '未着手',
+  '保留': '保留',
+  '完了': '完了',
+};
+
+const PRIORITY_MAP = { '高': '高', '中': '中', '低': '低' };
+
+const DOMAIN_MAP = {
+  'プロダクト': 'プロダクト',
+  'PBGH': 'PBGH',
+  '総務': '総務',
+  'unique': 'unique',
+  'AITOKYO': 'AITOKYO',
+};
+
+async function notionRequest(endpoint, method, body) {
+  const token = getToken();
+  if (!token) { toast('Notionトークンを設定してください', 'error'); return null; }
+
+  try {
+    const res = await fetch(`https://api.anthropic.com/v1/messages`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-20250514',
+        max_tokens: 1000,
+        system: `You are a Notion API proxy. The user will provide a Notion API request config. Execute it using the Notion integration token: "${token}". Return ONLY the raw JSON response from Notion API, nothing else.`,
+        messages: [{
+          role: 'user',
+          content: `Make this Notion API call and return only the JSON response:
+Endpoint: ${endpoint}
+Method: ${method}
+Body: ${JSON.stringify(body)}`
+        }]
+      })
+    });
+    const data = await res.json();
+    const text = data.content?.[0]?.text || '';
+    try {
+      const jsonMatch = text.match(/\{[\s\S]*\}/);
+      return jsonMatch ? JSON.parse(jsonMatch[0]) : null;
+    } catch { return null; }
+  } catch (e) {
+    console.error(e);
+    return null;
+  }
+}
+
+async function syncTaskToNotion(id) {
+  const task = tasks.find(t => t.id === id);
+  if (!task) return;
+
+  const btn = document.getElementById(`sync-btn-${id}`);
+  btn.classList.add('syncing');
+  btn.textContent = '同期中...';
+
+  const token = getToken();
+  if (!token) {
+    toast('Notionトークンをサイドバーに設定してください', 'error');
+    btn.classList.remove('syncing');
+    btn.textContent = '🔄 Notionに登録';
+    return;
+  }
+
+  try {
+    const properties = {
+      'タスク名': { title: [{ text: { content: task.name } }] },
+      'ステータス': { status: { name: STATUS_MAP[task.status] || '未着手' } },
+      '担当者': { people: [{ id: KUSUMOTO_USER_ID }] },
+      '説明': { rich_text: [{ text: { content: task.note || '' } }] },
+      '優先度': { select: { name: task.priority } },
+      '法人': { multi_select: [{ name: task.domain }] },
+    };
+
+    if (task.deadline) {
+      properties['締切日'] = { date: { start: task.deadline } };
+    }
+
+    const endpoint = task.notionId
+      ? `https://api.notion.com/v1/pages/${task.notionId}`
+      : 'https://api.notion.com/v1/pages';
+
+    const body = task.notionId
+      ? { properties }
+      : { parent: { database_id: NOTION_DB_ID }, properties };
+
+    const response = await fetch(endpoint, {
+      method: task.notionId ? 'PATCH' : 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json',
+        'Notion-Version': '2022-06-28'
+      },
+      body: JSON.stringify(body)
+    });
+
+    const data = await response.json();
+
+    if (data.id) {
+      task.notionId = data.id;
+      saveData();
+      btn.classList.remove('syncing');
+      btn.classList.add('synced');
+      btn.textContent = '✅ Notion同期済み';
+      toast(`「${task.name.substring(0, 20)}...」をNotionに登録しました`, 'success');
+      renderTasks();
+    } else {
+      throw new Error(JSON.stringify(data));
+    }
+  } catch (e) {
+    console.error(e);
+    btn.classList.remove('syncing');
+    btn.textContent = '🔄 Notionに登録';
+    toast('Notion同期に失敗しました。トークンを確認してください', 'error');
+  }
+}
+
+async function syncAllToNotion() {
+  const token = getToken();
+  if (!token) { toast('Notionトークンをサイドバーに設定してください', 'error'); return; }
+
+  const unsyncedTasks = tasks.filter(t => !t.notionId && t.status !== '完了');
+  if (unsyncedTasks.length === 0) { toast('未同期タスクはありません', 'success'); return; }
+
+  toast(`${unsyncedTasks.length}件のタスクを同期中...`, 'success');
+
+  let successCount = 0;
+  for (const task of unsyncedTasks) {
+    await syncTaskToNotion(task.id);
+    successCount++;
+    await new Promise(r => setTimeout(r, 300)); // レート制限対策
+  }
+
+  toast(`${successCount}件のタスクをNotionに同期しました`, 'success');
+}
+
+// ========================================
+// モーダル・トースト
+// ========================================
+function closeModal(id) {
+  document.getElementById(id).classList.remove('open');
+}
+
+function toast(message, type = 'success') {
+  const container = document.getElementById('toast-container');
+  const el = document.createElement('div');
+  el.className = `toast ${type}`;
+  el.innerHTML = `<span>${type === 'success' ? '✅' : '❌'}</span> ${message}`;
+  container.appendChild(el);
+  setTimeout(() => el.remove(), 3500);
+}
+
+// モーダル外クリックで閉じる
+document.querySelectorAll('.modal-overlay').forEach(overlay => {
+  overlay.addEventListener('click', function(e) {
+    if (e.target === this) this.classList.remove('open');
+  });
+});
+
+// ========================================
+// 初期化
+// ========================================
+loadToken();
+renderTasks();
+</script>
+</body>
+</html>
