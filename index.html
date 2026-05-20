@@ -1522,20 +1522,19 @@ function switchTab(tab, btn) {
 // クイック追加（自然文からタスクを抽出）
 // ========================================
 const DOMAIN_KEYWORDS = {
-  'プロダクト': ['プロダクト', 'AIme', 'aime', 'Shopify', 'shopify', 'LP', 'EC', 'サイト'],
-  'PBGH': ['PBGH', 'pbgh', 'HD', 'hd', '本社', '役員', '橋本', '向井', '宮崎', '尾形'],
-  '総務': ['総務', '雇用', '採用', '労務', 'メイカ', '内定', '契約'],
-  'unique': ['unique', 'ユニーク', 'サロン', '中島', '翼', '池田'],
-  'AITOKYO': ['AITOKYO', 'aitokyo', 'アイトーキョー', '内装', '是正'],
+  'プロダクト': ['プロダクト', 'AIme', 'aime', 'Shopify', 'shopify', 'LP', 'ECサイト', 'EC', 'サイト', 'ローンチ', 'イベント', '鎌形', '撮影', '素材', '動画', 'Prestige', 'デモ', '事業計画', '配送', '倉庫'],
+  'unique': ['unique', 'ユニーク', 'サロン', '中島', '翼', 'AITOKYO', 'aitokyo', 'アイトーキョー', '内装', '是正', '工事'],
+  'PBGH': ['PBGH', 'pbgh', 'HD', 'hd', '本社', '役員', '橋本', '向井', '宮崎', '尾形', 'Git', 'Notion', 'Slack', '権限', 'リスキリング', 'AIX', '不動産', '店舗開発'],
+  '総務': ['総務', '雇用', '採用', '労務', 'メイカ', '内定', '契約', 'LS', '顧問', '通知書', '覚書', 'タグマネ', '給与', '財務'],
 };
 
 const PRIORITY_KEYWORDS = {
-  '高': ['緊急', '至急', 'asap', 'ASAP', '高優先', '最優先', '優先度高', '優先度:高', 'urgent'],
+  '高': ['緊急', '至急', 'asap', 'ASAP', '高優先', '最優先', '優先度高', '優先度:高', 'urgent', '重要', '早急', 'なるべく早く', 'アラート', '炎上'],
   '低': ['低優先', '優先度低', '優先度:低', 'いつでも', '余裕', 'low'],
 };
 
 const STATUS_KEYWORDS = {
-  'アラート': ['アラート', '炎上', 'やばい', 'ヤバい', '遅延'],
+  'アラート': ['アラート', '炎上', 'やばい', 'ヤバい', '遅延', '超過'],
   '進行中': ['進行中', '着手中', '対応中'],
   '保留': ['保留', 'ペンディング', 'pending'],
 };
@@ -1547,7 +1546,7 @@ function parseQuickInput(line) {
   const original = text;
   const extracted = { source: '', deadline: '', priority: '中', domain: '', status: '未着手' };
 
-  // ① 期日を抽出（YYYY-MM-DD, YYYY/M/D, M/D, 「明日」「今日」「来週」「N日後」）
+  // ① 期日を抽出
   const today = new Date(); today.setHours(0,0,0,0);
   const fmt = d => d.toISOString().slice(0, 10);
 
@@ -1556,6 +1555,10 @@ function parseQuickInput(line) {
     extracted.deadline = `${m[1]}-${String(m[2]).padStart(2,'0')}-${String(m[3]).padStart(2,'0')}`;
     text = text.replace(m[0], '');
   } else if ((m = text.match(/(\d{1,2})[\/\-](\d{1,2})(?!\d)/))) {
+    const y = today.getFullYear();
+    extracted.deadline = `${y}-${String(m[1]).padStart(2,'0')}-${String(m[2]).padStart(2,'0')}`;
+    text = text.replace(m[0], '');
+  } else if ((m = text.match(/(\d{1,2})月(\d{1,2})日/))) {
     const y = today.getFullYear();
     extracted.deadline = `${y}-${String(m[1]).padStart(2,'0')}-${String(m[2]).padStart(2,'0')}`;
     text = text.replace(m[0], '');
@@ -1572,7 +1575,7 @@ function parseQuickInput(line) {
     text = text.replace(/明後日|あさって/, '');
   } else if (/今週(末)?/.test(text)) {
     const d = new Date(today);
-    const offset = 5 - d.getDay(); // 金曜
+    const offset = 5 - d.getDay();
     d.setDate(d.getDate() + (offset >= 0 ? offset : offset + 7));
     extracted.deadline = fmt(d);
     text = text.replace(/今週末?/, '');
@@ -1580,15 +1583,25 @@ function parseQuickInput(line) {
     const d = new Date(today); d.setDate(d.getDate()+7);
     extracted.deadline = fmt(d);
     text = text.replace(/来週/, '');
-  } else if (/月末/.test(text)) {
+  } else if (/今月中|月末/.test(text)) {
     const d = new Date(today.getFullYear(), today.getMonth()+1, 0);
     extracted.deadline = fmt(d);
-    text = text.replace(/月末/, '');
+    text = text.replace(/今月中|月末/, '');
+  } else if (/来月/.test(text)) {
+    const d = new Date(today.getFullYear(), today.getMonth()+2, 0);
+    extracted.deadline = fmt(d);
+    text = text.replace(/来月/, '');
   } else if ((m = text.match(/(\d{1,2})日後/))) {
     const d = new Date(today); d.setDate(d.getDate() + Number(m[1]));
     extracted.deadline = fmt(d);
     text = text.replace(m[0], '');
+  } else if ((m = text.match(/(\d{1,2})週間?後/))) {
+    const d = new Date(today); d.setDate(d.getDate() + Number(m[1])*7);
+    extracted.deadline = fmt(d);
+    text = text.replace(m[0], '');
   }
+  // 「〇〇まで」パターン（日付抽出後に残った「まで」を除去）
+  text = text.replace(/まで(に)?/, '');
 
   // ② 優先度
   for (const [pri, kws] of Object.entries(PRIORITY_KEYWORDS)) {
@@ -1617,7 +1630,6 @@ function parseQuickInput(line) {
     for (const kw of kws) {
       if (text.includes(kw)) {
         extracted.domain = dom;
-        // 領域キーワードはタスク名に含まれていることが多いので、削除はしない
         break;
       }
     }
@@ -1625,7 +1637,7 @@ function parseQuickInput(line) {
   }
   if (!extracted.domain) extracted.domain = 'PBGH';
 
-  // ⑤ 出典（LINE / 口頭 / 電話 / Slack / メール）
+  // ⑤ 出典
   const sourceMatch = text.match(/(LINE[^\s]*|line[^\s]*|口頭[^\s]*|電話[^\s]*|Slack[^\s]*|slack[^\s]*|メール[^\s]*|mail[^\s]*)/);
   if (sourceMatch) {
     extracted.source = sourceMatch[0];
@@ -1634,7 +1646,6 @@ function parseQuickInput(line) {
     extracted.source = '口頭・LINE等';
   }
 
-  // タスク名 = 残りの文字列を整形
   const name = text.replace(/\s+/g, ' ').replace(/^[\s,、。・]+|[\s,、。・]+$/g, '').trim();
   if (!name) return null;
 
@@ -1690,10 +1701,34 @@ function updateQuickPreview() {
 }
 
 // ========================================
-// 議事録URLからタスク抽出
+// 議事録URLからタスク抽出（スキル定義準拠・強化版）
 // ========================================
+
+// 人名対応表（スキル定義より）
+const PERSON_NAME_MAP = {
+  'マサシ': '松舘', 'まさし': '松舘', 'matsudate': '松舘',
+  'kusumoto': '楠元', 'ryu': '楠元', '龍矢': '楠元',
+  'tsubasa': '中島翼',
+  'ishizuka': '石塚',
+  'mukai': '向井',
+  'kamagata': '鎌形',
+  'yukke': '堀江', 'ゆっけ': '堀江',
+  'hashimoto': '橋本',
+  'あかね': '西村あかね',
+  'ikeda': '池田龍也',
+  'miyazaki': '宮崎', 'cto': '宮崎',
+};
+
+// 楠元を示す全パターン（バリエーション対応）
+const KUSUMOTO_PATTERNS = [/楠元/, /kusumoto/i, /龍矢/];
+
+// アクションセクションのヘッダーパターン
+const ACTION_SECTION_PATTERNS = [
+  /アクション/i, /TODO/i, /To[\s\-]?Do/i, /対応事項/, /宿題/,
+  /Action[\s\-]?Item/i, /タスク/, /次回アクション/, /担当/, /やること/, /宿題/
+];
+
 function extractPageIdFromUrl(url) {
-  // https://www.notion.so/PageTitle-xxxxxxxx or https://www.notion.so/xxxxxxxx?v=...
   const m = url.match(/([a-f0-9]{32})(?:[?#]|$)/i)
            || url.match(/([a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})/i);
   if (!m) return null;
@@ -1718,47 +1753,104 @@ async function fetchAllBlocks(blockId, token) {
   return results;
 }
 
-function blockToText(block) {
-  const type = block.type;
-  const content = block[type];
-  if (!content || !content.rich_text) return '';
-  return content.rich_text.map(r => r.plain_text).join('');
-}
-
-async function getAllTextLines(pageId, token) {
-  const lines = [];
-  async function traverse(id) {
-    const blocks = await fetchAllBlocks(id, token);
-    for (const b of blocks) {
-      const text = blockToText(b).trim();
-      if (text) lines.push(text);
-      if (b.has_children) await traverse(b.id);
+// ブロックをメタ情報付きで再帰取得
+async function getAllBlocksWithMeta(pageId, token) {
+  const blocks = [];
+  async function traverse(id, depth = 0) {
+    if (depth > 6) return;
+    const raw = await fetchAllBlocks(id, token);
+    for (const b of raw) {
+      const type = b.type;
+      const content = b[type];
+      const text = (content?.rich_text || []).map(r => r.plain_text).join('').trim();
+      const checked = type === 'to_do' ? (content?.checked ?? false) : null;
+      blocks.push({ text, type, checked, depth });
+      if (b.has_children) await traverse(b.id, depth + 1);
     }
   }
   await traverse(pageId);
-  return lines;
+  return blocks;
 }
 
-function extractTasksFromLines(lines, sourceName) {
+// タスク名のクリーニング（楠元・記号・助詞を除去）
+function cleanTaskName(line) {
+  return line
+    .replace(/[\s　]*楠元[\s　]*$/g, '')          // 末尾の楠元
+    .replace(/^楠元[\s　]*[：:]\s*/g, '')          // 先頭「楠元：」
+    .replace(/楠元[\s　]*(が|は|も|に|の|さん)/g, '') // 「楠元が〜」
+    .replace(/kusumoto[\s　]*/gi, '')
+    .replace(/龍矢[\s　]*/g, '')
+    .replace(/^[\[\]☐☑✓✔\s　]+/, '')             // チェックボックス記号
+    .replace(/^[・\-\*▶→►＞>\s　]+/, '')          // 箇条書き記号
+    .replace(/[、。\s　]+$/g, '')
+    .trim();
+}
+
+// 議事録テキストから領域を推論
+function inferDomainFromText(text) {
+  if (/AIme|Shopify|EC|サイト|ローンチ|プロダクト|鎌形|LP|撮影|素材|動画|Prestige|事業計画|配送|倉庫/.test(text)) return 'プロダクト';
+  if (/unique|サロン|AITOKYO|内装|是正|工事|中島|翼/.test(text)) return 'unique';
+  if (/HD|役員|PBGH|Git|Notion|Slack|向井|権限|リスキリング|AIX|不動産|店舗開発/.test(text)) return 'PBGH';
+  if (/採用|給与|労務|契約|総務|LS|顧問|雇用|内定|通知書|覚書|タグマネ/.test(text)) return '総務';
+  return 'PBGH';
+}
+
+// 議事録テキストから優先度を推論
+function inferPriorityFromText(text) {
+  if (/緊急|至急|急ぎ|超重要|最優先|アラート|炎上|遅延|超過/.test(text)) return '高';
+  if (/重要|早急|なるべく早く/.test(text)) return '高';
+  if (/低優先|いつでも|余裕/.test(text)) return '低';
+  return '中';
+}
+
+// スキル定義準拠のタスク抽出
+function extractKusumotoTasks(blocks, sourceName) {
   const extracted = [];
-  // 「楠元」が行末（または末尾近く）にあるパターン
-  const pattern = /楠元/;
-  for (const line of lines) {
-    if (!pattern.test(line)) continue;
-    // 楠元より前をタスク名として取得
-    let taskName = line
-      .replace(/楠元.*$/, '')           // 楠元以降を削除
-      .replace(/^[・\-\s　]+/, '')       // 先頭の記号を削除
-      .replace(/[\s　]+$/, '')           // 末尾スペース削除
-      .trim();
-    if (!taskName) continue;
-    // 自然文パースで期日・領域などを抽出
-    const parsed = parseQuickInput(taskName + ' ' + sourceName);
-    if (parsed) {
-      parsed.source = sourceName;
-      extracted.push(parsed);
+  const seen = new Set();
+  let inActionSection = false;
+
+  for (const block of blocks) {
+    const { text, type, checked } = block;
+
+    // ① 見出しブロックでアクションセクション判定
+    if (['heading_1', 'heading_2', 'heading_3'].includes(type)) {
+      inActionSection = ACTION_SECTION_PATTERNS.some(p => p.test(text));
+      continue;
     }
+
+    // ② 完了済みチェックボックスはスキップ
+    if (type === 'to_do' && checked === true) continue;
+
+    const isKusumoto = KUSUMOTO_PATTERNS.some(p => p.test(text));
+    const isUncheckedTodo = type === 'to_do' && checked === false;
+    // アクションセクション内の箇条書き・チェックボックスも楠元担当と判断
+    const inActionBullet = inActionSection &&
+      (isUncheckedTodo || ['bulleted_list_item', 'numbered_list_item'].includes(type));
+
+    if (!isKusumoto && !inActionBullet) continue;
+    if (!text || text.length < 4) continue;
+
+    const taskName = cleanTaskName(text);
+    if (!taskName || taskName.length < 2) continue;
+
+    // 重複排除
+    const key = taskName.replace(/\s/g, '');
+    if (seen.has(key)) continue;
+    seen.add(key);
+
+    // parseQuickInputで期日・優先度を取得
+    const parsed = parseQuickInput(taskName);
+    extracted.push({
+      name: parsed?.name || taskName,
+      status: '未着手',
+      priority: parsed?.priority || inferPriorityFromText(text),
+      domain: parsed?.domain || inferDomainFromText(taskName),
+      deadline: parsed?.deadline || '',
+      source: sourceName,
+      note: '',
+    });
   }
+
   return extracted;
 }
 
@@ -1789,9 +1881,9 @@ async function extractFromNotionPage() {
       ? (titleProp.title || []).map(t => t.plain_text).join('').trim()
       : 'Notion議事録';
 
-    // 全テキスト行を取得
-    const lines = await getAllTextLines(pageId, token);
-    const extracted = extractTasksFromLines(lines, sourceName);
+    // ブロックをメタ情報付きで取得してタスク抽出
+    const blocks = await getAllBlocksWithMeta(pageId, token);
+    const extracted = extractKusumotoTasks(blocks, sourceName);
 
     _extractedTasks = extracted;
     renderPreview(extracted);
