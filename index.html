@@ -853,6 +853,7 @@
   </div>
   <div class="header-right">
     <button class="btn btn-secondary btn-sm" onclick="openMinutesModal()">📄 議事録追加</button>
+    <button class="btn btn-secondary btn-sm" onclick="openQuickAddModal()">⚡ クイック追加</button>
     <button class="btn btn-primary btn-sm" onclick="openAddTaskModal()">＋ タスク追加</button>
     <button class="btn btn-success btn-sm" onclick="syncAllToNotion()">🔄 Notion全同期</button>
   </div>
@@ -1080,6 +1081,36 @@
       <button class="btn btn-danger" style="margin-right:auto;" onclick="deleteTaskFromModal()">🗑 削除</button>
       <button class="btn btn-secondary" onclick="closeModal('edit-task-modal')">キャンセル</button>
       <button class="btn btn-primary" onclick="saveEditTask()">保存</button>
+    </div>
+  </div>
+</div>
+
+<!-- クイック追加モーダル -->
+<div class="modal-overlay" id="quick-add-modal">
+  <div class="modal" style="max-width: 580px;">
+    <div class="modal-title">⚡ クイック追加</div>
+    <div style="font-size: 12px; color: var(--text2); margin-bottom: 10px; line-height: 1.7;">
+      口頭・LINEで降ってきたタスクをそのまま打ち込んでください。<br>
+      <span style="color: var(--text3);">期日・カテゴリ・優先度・出典が自動で抽出されます。改行で区切ると複数タスクを一度に追加できます。</span>
+    </div>
+    <details style="margin-bottom:12px;">
+      <summary style="font-size:11px; color: var(--text3); cursor:pointer;">💡 入力例</summary>
+      <div style="background: var(--surface2); border: 1px solid var(--border); border-radius: 7px; padding: 10px; margin-top: 6px; font-size: 12px; color: var(--text2); line-height: 1.8;">
+        ・<code>明日までにメイカさんに連絡 緊急 PBGH LINE橋本</code><br>
+        ・<code>5/25 池田と素材確認 プロダクト</code><br>
+        ・<code>来週 サロン向けEC打診 高 unique 口頭</code>
+      </div>
+    </details>
+    <textarea class="form-textarea" id="quick-input" style="min-height: 130px; font-size: 14px;" placeholder="例: 明日までにメイカさんに連絡 緊急 PBGH LINE&#10;5/25 池田と素材確認 プロダクト" oninput="updateQuickPreview()"></textarea>
+
+    <div id="quick-preview" style="margin-top: 14px; display: none;">
+      <div style="font-size: 11px; color: var(--text3); font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; margin-bottom: 8px;">抽出結果プレビュー</div>
+      <div id="quick-preview-list"></div>
+    </div>
+
+    <div class="modal-actions">
+      <button class="btn btn-secondary" onclick="closeModal('quick-add-modal')">キャンセル</button>
+      <button class="btn btn-primary" onclick="submitQuickAdd()">タスク追加</button>
     </div>
   </div>
 </div>
@@ -1462,6 +1493,194 @@ function switchTab(tab, btn) {
   btn.classList.add('active');
   document.getElementById(`tab-${tab}`).classList.add('active');
   if (tab === 'minutes') renderMinutes();
+}
+
+// ========================================
+// クイック追加（自然文からタスクを抽出）
+// ========================================
+const DOMAIN_KEYWORDS = {
+  'プロダクト': ['プロダクト', 'AIme', 'aime', 'Shopify', 'shopify', 'LP', 'EC', 'サイト'],
+  'PBGH': ['PBGH', 'pbgh', 'HD', 'hd', '本社', '役員', '橋本', '向井', '宮崎', '尾形'],
+  '総務': ['総務', '雇用', '採用', '労務', 'メイカ', '内定', '契約'],
+  'unique': ['unique', 'ユニーク', 'サロン', '中島', '翼', '池田'],
+  'AITOKYO': ['AITOKYO', 'aitokyo', 'アイトーキョー', '内装', '是正'],
+};
+
+const PRIORITY_KEYWORDS = {
+  '高': ['緊急', '至急', 'asap', 'ASAP', '高優先', '最優先', '優先度高', '優先度:高', 'urgent'],
+  '低': ['低優先', '優先度低', '優先度:低', 'いつでも', '余裕', 'low'],
+};
+
+const STATUS_KEYWORDS = {
+  'アラート': ['アラート', '炎上', 'やばい', 'ヤバい', '遅延'],
+  '進行中': ['進行中', '着手中', '対応中'],
+  '保留': ['保留', 'ペンディング', 'pending'],
+};
+
+function parseQuickInput(line) {
+  let text = line.trim();
+  if (!text) return null;
+
+  const original = text;
+  const extracted = { source: '', deadline: '', priority: '中', domain: '', status: '未着手' };
+
+  // ① 期日を抽出（YYYY-MM-DD, YYYY/M/D, M/D, 「明日」「今日」「来週」「N日後」）
+  const today = new Date(); today.setHours(0,0,0,0);
+  const fmt = d => d.toISOString().slice(0, 10);
+
+  let m;
+  if ((m = text.match(/(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})/))) {
+    extracted.deadline = `${m[1]}-${String(m[2]).padStart(2,'0')}-${String(m[3]).padStart(2,'0')}`;
+    text = text.replace(m[0], '');
+  } else if ((m = text.match(/(\d{1,2})[\/\-](\d{1,2})(?!\d)/))) {
+    const y = today.getFullYear();
+    extracted.deadline = `${y}-${String(m[1]).padStart(2,'0')}-${String(m[2]).padStart(2,'0')}`;
+    text = text.replace(m[0], '');
+  } else if (/今日|きょう/.test(text)) {
+    extracted.deadline = fmt(today);
+    text = text.replace(/今日|きょう/, '');
+  } else if (/明日|あした|あす/.test(text)) {
+    const d = new Date(today); d.setDate(d.getDate()+1);
+    extracted.deadline = fmt(d);
+    text = text.replace(/明日|あした|あす/, '');
+  } else if (/明後日|あさって/.test(text)) {
+    const d = new Date(today); d.setDate(d.getDate()+2);
+    extracted.deadline = fmt(d);
+    text = text.replace(/明後日|あさって/, '');
+  } else if (/今週(末)?/.test(text)) {
+    const d = new Date(today);
+    const offset = 5 - d.getDay(); // 金曜
+    d.setDate(d.getDate() + (offset >= 0 ? offset : offset + 7));
+    extracted.deadline = fmt(d);
+    text = text.replace(/今週末?/, '');
+  } else if (/来週/.test(text)) {
+    const d = new Date(today); d.setDate(d.getDate()+7);
+    extracted.deadline = fmt(d);
+    text = text.replace(/来週/, '');
+  } else if (/月末/.test(text)) {
+    const d = new Date(today.getFullYear(), today.getMonth()+1, 0);
+    extracted.deadline = fmt(d);
+    text = text.replace(/月末/, '');
+  } else if ((m = text.match(/(\d{1,2})日後/))) {
+    const d = new Date(today); d.setDate(d.getDate() + Number(m[1]));
+    extracted.deadline = fmt(d);
+    text = text.replace(m[0], '');
+  }
+
+  // ② 優先度
+  for (const [pri, kws] of Object.entries(PRIORITY_KEYWORDS)) {
+    for (const kw of kws) {
+      if (text.includes(kw)) {
+        extracted.priority = pri;
+        text = text.replace(kw, '');
+        break;
+      }
+    }
+  }
+
+  // ③ ステータス
+  for (const [st, kws] of Object.entries(STATUS_KEYWORDS)) {
+    for (const kw of kws) {
+      if (text.includes(kw)) {
+        extracted.status = st;
+        text = text.replace(kw, '');
+        break;
+      }
+    }
+  }
+
+  // ④ 領域（カテゴリ）
+  for (const [dom, kws] of Object.entries(DOMAIN_KEYWORDS)) {
+    for (const kw of kws) {
+      if (text.includes(kw)) {
+        extracted.domain = dom;
+        // 領域キーワードはタスク名に含まれていることが多いので、削除はしない
+        break;
+      }
+    }
+    if (extracted.domain) break;
+  }
+  if (!extracted.domain) extracted.domain = 'PBGH';
+
+  // ⑤ 出典（LINE / 口頭 / 電話 / Slack / メール）
+  const sourceMatch = text.match(/(LINE[^\s]*|line[^\s]*|口頭[^\s]*|電話[^\s]*|Slack[^\s]*|slack[^\s]*|メール[^\s]*|mail[^\s]*)/);
+  if (sourceMatch) {
+    extracted.source = sourceMatch[0];
+    text = text.replace(sourceMatch[0], '');
+  } else {
+    extracted.source = '口頭・LINE等';
+  }
+
+  // タスク名 = 残りの文字列を整形
+  const name = text.replace(/\s+/g, ' ').replace(/^[\s,、。・]+|[\s,、。・]+$/g, '').trim();
+  if (!name) return null;
+
+  return { name, ...extracted, original };
+}
+
+function parseQuickInputAll(rawText) {
+  return rawText
+    .split(/\n+/)
+    .map(line => parseQuickInput(line))
+    .filter(t => t !== null);
+}
+
+function updateQuickPreview() {
+  const text = document.getElementById('quick-input').value;
+  const previewBox = document.getElementById('quick-preview');
+  const listEl = document.getElementById('quick-preview-list');
+  const parsed = parseQuickInputAll(text);
+
+  if (parsed.length === 0) {
+    previewBox.style.display = 'none';
+    return;
+  }
+  previewBox.style.display = 'block';
+
+  listEl.innerHTML = parsed.map((t, i) => `
+    <div style="background: var(--surface2); border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; margin-bottom: 6px;">
+      <div style="font-size: 13px; font-weight: 500; color: var(--text); margin-bottom: 6px;">${escHtml(t.name)}</div>
+      <div style="display:flex; flex-wrap:wrap; gap:5px;">
+        <span class="badge badge-status-${t.status}">${t.status}</span>
+        <span class="badge badge-source">${escHtml(t.domain)}</span>
+        ${t.deadline ? `<span class="badge badge-deadline-ok">${t.deadline}</span>` : '<span class="badge badge-deadline-ok" style="opacity:0.5;">期日なし</span>'}
+        <span class="badge" style="background:#f3f4f7; color: var(--text3); border:1px solid var(--border);">優先度: ${t.priority}</span>
+        <span class="badge" style="background:#f3f4f7; color: var(--text3); border:1px solid var(--border);">出典: ${escHtml(t.source)}</span>
+      </div>
+    </div>
+  `).join('');
+}
+
+function openQuickAddModal() {
+  document.getElementById('quick-input').value = '';
+  document.getElementById('quick-preview').style.display = 'none';
+  document.getElementById('quick-add-modal').classList.add('open');
+  setTimeout(() => document.getElementById('quick-input').focus(), 100);
+}
+
+function submitQuickAdd() {
+  const text = document.getElementById('quick-input').value;
+  const parsed = parseQuickInputAll(text);
+  if (parsed.length === 0) { toast('入力内容を確認してください', 'error'); return; }
+
+  parsed.forEach(p => {
+    tasks.unshift({
+      id: 't' + Date.now() + Math.random().toString(36).slice(2,6),
+      name: p.name,
+      source: p.source,
+      deadline: p.deadline,
+      status: p.status,
+      priority: p.priority,
+      domain: p.domain,
+      note: '',
+      notionId: null
+    });
+  });
+
+  saveData();
+  closeModal('quick-add-modal');
+  renderTasks();
+  toast(`${parsed.length}件のタスクを追加しました`, 'success');
 }
 
 // ========================================
