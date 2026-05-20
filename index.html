@@ -25,6 +25,48 @@
     --shadow-md: 0 4px 16px rgba(0,0,0,0.10), 0 1px 4px rgba(0,0,0,0.06);
   }
 
+  /* パスワードゲート */
+  #pw-gate {
+    position: fixed;
+    inset: 0;
+    background: var(--bg);
+    z-index: 9999;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-direction: column;
+    gap: 20px;
+  }
+  #pw-gate.hidden { display: none; }
+  #pw-box {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 36px 32px;
+    box-shadow: var(--shadow-md);
+    width: 100%;
+    max-width: 340px;
+    text-align: center;
+  }
+  #pw-box h2 { font-size: 18px; font-weight: 700; color: var(--text); margin-bottom: 6px; }
+  #pw-box p  { font-size: 13px; color: var(--text2); margin-bottom: 20px; }
+  #pw-input {
+    width: 100%;
+    padding: 10px 14px;
+    border: 1.5px solid var(--border);
+    border-radius: 8px;
+    font-size: 15px;
+    font-family: inherit;
+    outline: none;
+    margin-bottom: 12px;
+    text-align: center;
+    letter-spacing: 4px;
+    background: var(--surface2);
+    color: var(--text);
+  }
+  #pw-input:focus { border-color: var(--accent); background: var(--surface); }
+  #pw-error { font-size: 12px; color: var(--danger); min-height: 18px; margin-bottom: 8px; }
+
   * { margin: 0; padding: 0; box-sizing: border-box; }
 
   body {
@@ -842,6 +884,20 @@
 </head>
 <body>
 
+<!-- パスワードゲート -->
+<div id="pw-gate">
+  <div id="pw-box">
+    <div style="font-size:32px; margin-bottom:12px;">🔐</div>
+    <h2>楠元 タスク管理</h2>
+    <p>パスワードを入力してください</p>
+    <input type="password" id="pw-input" placeholder="••••••••" maxlength="32"
+      onkeydown="if(event.key==='Enter')checkPw()"
+      oninput="document.getElementById('pw-error').textContent=''">
+    <div id="pw-error"></div>
+    <button class="btn btn-primary" onclick="checkPw()" style="width:100%; justify-content:center;">ログイン</button>
+  </div>
+</div>
+
 <div class="header">
   <div class="header-left">
     <button class="sidebar-toggle" onclick="toggleSidebar()">☰</button>
@@ -933,6 +989,12 @@
         </div>
         <button id="notion-fetch-btn" onclick="fetchFromNotion()" class="btn btn-secondary btn-sm" style="width:100%; margin-top:10px; justify-content:center;">⬇ Notionから取得</button>
         <div style="font-size: 11px; color: var(--text3); margin-top: 6px;" id="last-fetch-label"></div>
+
+        <div style="margin-top: 14px; padding-top: 10px; border-top: 1px solid var(--border);">
+          <div style="font-size: 11px; color: var(--text3); margin-bottom: 6px; font-weight: 500;">Proxy URL（Cloudflare Worker）</div>
+          <input type="text" class="notion-token-input" id="notion-proxy-url" placeholder="https://xxx.workers.dev/notion" oninput="saveProxyUrl()" style="font-size:11px;">
+          <div style="font-size: 10px; color: var(--text3); margin-top: 4px;" id="proxy-status">未設定（CORS制限あり）</div>
+        </div>
       </div>
     </div>
   </div>
@@ -1172,6 +1234,23 @@
 const NOTION_DB_ID = '2a5a452b-1aab-80b4-aa40-e5b67f5bfa37';
 const KUSUMOTO_USER_ID = '34dd872b-594c-814e-b814-00022734dcdc';
 
+// Notion API のベースURL。
+// Cloudflare Worker を設定したら、サイドバーで Worker URL を入力してください。
+// 例: https://my-worker.your-name.workers.dev/notion
+// 未設定の場合は直接 api.notion.com へアクセス（CORS制限あり）
+function getNotionBase() {
+  return localStorage.getItem('notion-proxy-url') || 'https://api.notion.com';
+}
+
+function notionFetch(path, options = {}) {
+  const base = getNotionBase();
+  // プロキシ経由の場合 /notion プレフィックスが付くので調整
+  // base が api.notion.com なら /v1/... をそのまま付ける
+  // base が Worker URL なら /v1/... を付ける（Worker が /notion/v1/... を受けるため変換不要）
+  const url = base.replace(/\/$/, '') + path;
+  return fetch(url, options);
+}
+
 let currentFilter = 'all';
 
 const initialTasks = [
@@ -1262,6 +1341,28 @@ function loadToken() {
   document.getElementById('token-status').textContent = hasToken ? '✅ 設定済み' : '未設定';
   document.getElementById('auto-sync-status').style.display = hasToken ? 'flex' : 'none';
   return token;
+}
+
+function saveProxyUrl() {
+  const url = document.getElementById('notion-proxy-url').value.trim();
+  if (url) {
+    localStorage.setItem('notion-proxy-url', url);
+    document.getElementById('proxy-status').textContent = '✅ プロキシ設定済み';
+    document.getElementById('proxy-status').style.color = 'var(--success)';
+  } else {
+    localStorage.removeItem('notion-proxy-url');
+    document.getElementById('proxy-status').textContent = '未設定（CORS制限あり）';
+    document.getElementById('proxy-status').style.color = '';
+  }
+}
+
+function loadProxyUrl() {
+  const url = localStorage.getItem('notion-proxy-url') || '';
+  document.getElementById('notion-proxy-url').value = url;
+  if (url) {
+    document.getElementById('proxy-status').textContent = '✅ プロキシ設定済み';
+    document.getElementById('proxy-status').style.color = 'var(--success)';
+  }
 }
 
 let tasks = loadData();
@@ -1742,7 +1843,7 @@ async function fetchAllBlocks(blockId, token) {
   do {
     const params = new URLSearchParams({ page_size: '100' });
     if (cursor) params.set('start_cursor', cursor);
-    const res = await fetch(`https://api.notion.com/v1/blocks/${blockId}/children?${params}`, {
+    const res = await notionFetch(`/v1/blocks/${blockId}/children?${params}`, {
       headers: { 'Authorization': `Bearer ${token}`, 'Notion-Version': '2022-06-28' }
     });
     const data = await res.json();
@@ -1869,7 +1970,7 @@ async function extractFromNotionPage() {
 
   try {
     // ページタイトル取得
-    const pageRes = await fetch(`https://api.notion.com/v1/pages/${pageId}`, {
+    const pageRes = await notionFetch(`/v1/pages/${pageId}`, {
       headers: { 'Authorization': `Bearer ${token}`, 'Notion-Version': '2022-06-28' }
     });
     const pageData = await pageRes.json();
@@ -2123,14 +2224,14 @@ async function syncTaskToNotion(id, silent = false) {
     }
 
     const endpoint = task.notionId
-      ? `https://api.notion.com/v1/pages/${task.notionId}`
-      : 'https://api.notion.com/v1/pages';
+      ? `/v1/pages/${task.notionId}`
+      : '/v1/pages';
 
     const body = task.notionId
       ? { properties }
       : { parent: { database_id: NOTION_DB_ID }, properties };
 
-    const response = await fetch(endpoint, {
+    const response = await notionFetch(endpoint, {
       method: task.notionId ? 'PATCH' : 'POST',
       headers: {
         'Authorization': `Bearer ${token}`,
@@ -2191,7 +2292,7 @@ async function fetchFromNotion() {
       const body = { page_size: 100 };
       if (cursor) body.start_cursor = cursor;
 
-      const res = await fetch(`https://api.notion.com/v1/databases/${NOTION_DB_ID}/query`, {
+      const res = await notionFetch(`/v1/databases/${NOTION_DB_ID}/query`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -2323,9 +2424,47 @@ function closeSidebar() {
 }
 
 // ========================================
+// パスワードゲート
+// ========================================
+
+// パスワードは SHA-256 ハッシュで保存（平文を避ける）
+// デフォルトパスワード: pbgh2025
+// 変更する場合: await crypto.subtle.digest('SHA-256', new TextEncoder().encode('新パスワード'))
+//   → 16進数に変換した値を下記 PW_HASH に設定
+const PW_HASH = '54a1a79f914612f6d3c2e0cf8608fa97bbce56c7b1a9537d1b4ff2b84d4ce4fc';
+
+async function sha256(str) {
+  const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(str));
+  return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2,'0')).join('');
+}
+
+async function checkPw() {
+  const val = document.getElementById('pw-input').value;
+  if (!val) return;
+  const hash = await sha256(val);
+  if (hash === PW_HASH) {
+    sessionStorage.setItem('pw-ok', '1');
+    document.getElementById('pw-gate').classList.add('hidden');
+    document.getElementById('pw-input').value = '';
+  } else {
+    document.getElementById('pw-error').textContent = 'パスワードが違います';
+    document.getElementById('pw-input').focus();
+  }
+}
+
+(function initPwGate() {
+  if (sessionStorage.getItem('pw-ok') === '1') {
+    document.getElementById('pw-gate').classList.add('hidden');
+  } else {
+    setTimeout(() => document.getElementById('pw-input').focus(), 100);
+  }
+})();
+
+// ========================================
 // 初期化
 // ========================================
 loadToken();
+loadProxyUrl();
 updateLastFetchDisplay();
 renderTasks();
 
