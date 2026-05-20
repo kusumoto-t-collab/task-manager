@@ -949,8 +949,8 @@
         <div class="content-actions">
           <input type="text" style="background: var(--surface); border: 1px solid var(--border); border-radius: 8px; color: var(--text); padding: 6px 12px; font-size: 13px; font-family: inherit; outline: none; width: 180px;" placeholder="タスク検索..." id="search-input" oninput="renderTasks()">
           <select class="sort-select" id="sort-select" onchange="renderTasks()">
-            <option value="default">標準順</option>
             <option value="deadline-asc">期日が近い順</option>
+            <option value="default">標準順（ステータス）</option>
             <option value="deadline-desc">期日が遠い順</option>
             <option value="priority">優先度順</option>
             <option value="created">追加順</option>
@@ -1279,7 +1279,9 @@ function renderTasks() {
     alertSection.innerHTML = '';
   }
 
-  list.innerHTML = filtered.map(task => `
+  list.innerHTML = filtered.map(task => {
+    const minutesUrl = findMinutesUrl(task.source);
+    return `
     <div class="task-card ${task._expanded ? 'expanded' : ''}" id="card-${task.id}">
       <div class="task-card-header" onclick="toggleExpand('${task.id}')">
         <div class="task-priority-dot task-priority-${task.status === 'アラート' ? 'alert' : task.priority === '高' ? 'high' : task.priority === '中' ? 'mid' : 'low'}"></div>
@@ -1287,7 +1289,9 @@ function renderTasks() {
           <div class="task-name">${escHtml(task.name)}</div>
           <div class="task-meta">
             <span class="badge badge-status-${task.status}">${task.status}</span>
-            <span class="badge badge-source">${escHtml(task.source)}</span>
+            ${minutesUrl
+              ? `<a href="${escHtml(minutesUrl)}" target="_blank" rel="noopener noreferrer" class="badge badge-source" style="text-decoration:none;" onclick="event.stopPropagation()">📄 ${escHtml(task.source)}</a>`
+              : `<span class="badge badge-source">${escHtml(task.source)}</span>`}
             ${task.deadline ? `<span class="badge ${isOverdue(task.deadline) ? 'badge-deadline' : 'badge-deadline-ok'}">${task.deadline}${isOverdue(task.deadline) ? ' ⚠️' : ''}</span>` : ''}
             ${task.notionId ? '<span class="badge" style="background: #edf7f4; color: var(--accent2); border: 1px solid #b0ddd0;">Notion✓</span>' : ''}
           </div>
@@ -1305,6 +1309,14 @@ function renderTasks() {
               <option ${task.status === '保留' ? 'selected' : ''}>保留</option>
               <option ${task.status === '完了' ? 'selected' : ''}>完了</option>
             </select>
+          </div>
+        </div>
+        <div class="detail-row">
+          <div class="detail-label">出典議事録</div>
+          <div class="detail-value">
+            ${minutesUrl
+              ? `<a href="${escHtml(minutesUrl)}" target="_blank" rel="noopener noreferrer" style="color: var(--accent); text-decoration: none; font-size: 13px; display: inline-flex; align-items: center; gap: 4px;">${escHtml(task.source)} <span style="font-size:11px;">↗</span></a>`
+              : `<span style="color: var(--text3); font-size: 13px;">${escHtml(task.source)}</span>`}
           </div>
         </div>
         <div class="detail-row">
@@ -1328,10 +1340,21 @@ function renderTasks() {
         </div>
       </div>
     </div>
-  `).join('');
+  `;
+  }).join('');
 
   updateStats();
   updateFilterCounts();
+}
+
+function findMinutesUrl(source) {
+  if (!source) return '';
+  const s = source.toLowerCase();
+  const found = minutes.find(m => {
+    const t = m.title.toLowerCase();
+    return t.includes(s) || s.includes(t.replace(/[【】🧾🏗️\s]/g, ''));
+  });
+  return found ? found.url : '';
 }
 
 function escHtml(str) {
