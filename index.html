@@ -922,14 +922,16 @@
     </div>
 
     <div class="sidebar-section">
-      <div class="sidebar-label">Notion設定</div>
+      <div class="sidebar-label">Notion連携</div>
       <div style="padding: 4px;">
-        <div style="font-size: 11px; color: var(--text3); margin-bottom: 6px; font-weight: 500;">Notion Token</div>
+        <div style="font-size: 11px; color: var(--text3); margin-bottom: 6px; font-weight: 500;">Integration Token</div>
         <input type="password" class="notion-token-input" id="notion-token" placeholder="ntn_..." oninput="saveToken()">
-        <div style="font-size: 11px; color: var(--text3); margin-top: 6px;" id="token-status">未設定</div>
+        <div style="font-size: 11px; color: var(--text3); margin-top: 5px;" id="token-status">未設定</div>
         <div class="auto-sync-indicator" id="auto-sync-status" style="display:none;">
-          <span>⚡</span><span>ステータス変更時に自動同期</span>
+          <span>⚡</span><span>更新時にNotionへ自動反映</span>
         </div>
+        <button id="notion-fetch-btn" onclick="fetchFromNotion()" class="btn btn-secondary btn-sm" style="width:100%; margin-top:10px; justify-content:center;">⬇ Notionから取得</button>
+        <div style="font-size: 11px; color: var(--text3); margin-top: 6px;" id="last-fetch-label"></div>
       </div>
     </div>
   </div>
@@ -1113,7 +1115,7 @@
 // データ定義
 // ========================================
 
-const NOTION_DB_ID = '2a5a452b-1aab-80d9-8bb0-000bd9b797d4';
+const NOTION_DB_ID = '2a5a452b-1aab-80b4-aa40-e5b67f5bfa37';
 const KUSUMOTO_USER_ID = '34dd872b-594c-814e-b814-00022734dcdc';
 
 let currentFilter = 'all';
@@ -1679,6 +1681,112 @@ async function syncTaskToNotion(id, silent = false) {
   }
 }
 
+// ========================================
+// Notionからタスクを取得
+// ========================================
+const NOTION_STATUS_REVERSE = {
+  '未着手': '未着手',
+  '進行中': '進行中',
+  '保留': '保留',
+  '完了': '完了',
+};
+
+function updateLastFetchDisplay() {
+  const ts = localStorage.getItem('notion-last-fetch');
+  const el = document.getElementById('last-fetch-label');
+  if (el) el.textContent = ts ? `最終取得: ${ts}` : '';
+}
+
+async function fetchFromNotion() {
+  const token = getToken();
+  if (!token) { toast('Notionトークンを設定してください', 'error'); return; }
+
+  const btn = document.getElementById('notion-fetch-btn');
+  if (btn) { btn.textContent = '取得中...'; btn.disabled = true; }
+
+  try {
+    let allResults = [];
+    let cursor = undefined;
+
+    // ページネーション対応（100件以上でも全取得）
+    do {
+      const body = { page_size: 100 };
+      if (cursor) body.start_cursor = cursor;
+
+      const res = await fetch(`https://api.notion.com/v1/databases/${NOTION_DB_ID}/query`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+          'Notion-Version': '2022-06-28'
+        },
+        body: JSON.stringify(body)
+      });
+      const data = await res.json();
+      if (!data.results) throw new Error(data.message || JSON.stringify(data));
+      allResults = allResults.concat(data.results);
+      cursor = data.has_more ? data.next_cursor : undefined;
+    } while (cursor);
+
+    let newCount = 0, updatedCount = 0;
+
+    for (const page of allResults) {
+      const props = page.properties;
+
+      // タスク名
+      const nameArr = props['タスク名']?.title || [];
+      const name = nameArr.map(t => t.plain_text).join('').trim();
+      if (!name) continue;
+
+      // ステータス（Notionのstatusプロパティ）
+      const notionStatus = props['ステータス']?.status?.name || '未着手';
+      const status = NOTION_STATUS_REVERSE[notionStatus] || '未着手';
+
+      // その他プロパティ
+      const note     = (props['説明']?.rich_text || []).map(t => t.plain_text).join('');
+      const priority = props['優先度']?.select?.name || '中';
+      const domain   = (props['法人']?.multi_select || [])[0]?.name || 'PBGH';
+      const deadline = props['締切日']?.date?.start || '';
+      const source   = (props['出典']?.rich_text || []).map(t => t.plain_text).join('');
+
+      const existing = tasks.find(t => t.notionId === page.id);
+      if (existing) {
+        // 既存タスクを更新（ローカルで変更中のメモは保持）
+        existing.name     = name;
+        existing.status   = status;
+        existing.priority = priority;
+        existing.domain   = domain;
+        existing.deadline = deadline;
+        if (source) existing.source = source;
+        // noteはNotionの値で上書き（空でなければ）
+        if (note) existing.note = note;
+        updatedCount++;
+      } else {
+        tasks.push({
+          id: 'n_' + page.id.replace(/-/g, '').slice(0, 16),
+          name, status, note, priority, domain, deadline, source,
+          notionId: page.id
+        });
+        newCount++;
+      }
+    }
+
+    saveData();
+    renderTasks();
+
+    const ts = new Date().toLocaleString('ja-JP', { month:'numeric', day:'numeric', hour:'2-digit', minute:'2-digit' });
+    localStorage.setItem('notion-last-fetch', ts);
+    updateLastFetchDisplay();
+
+    toast(`Notion取得完了（新規 ${newCount}件 / 更新 ${updatedCount}件）`, 'success');
+  } catch (e) {
+    console.error(e);
+    toast('Notion取得に失敗しました。トークンを確認してください', 'error');
+  } finally {
+    if (btn) { btn.textContent = '⬇ Notionから取得'; btn.disabled = false; }
+  }
+}
+
 async function syncAllToNotion() {
   const token = getToken();
   if (!token) { toast('Notionトークンをサイドバーに設定してください', 'error'); return; }
@@ -1740,7 +1848,28 @@ function closeSidebar() {
 // 初期化
 // ========================================
 loadToken();
+updateLastFetchDisplay();
 renderTasks();
+
+// 24時間経過していたらNotionから自動取得
+(function autoFetchIfStale() {
+  const token = getToken();
+  if (!token) return;
+  const last = localStorage.getItem('notion-last-fetch');
+  if (!last) { fetchFromNotion(); return; }
+  // 最終取得からの経過時間を確認（24h = 86400000ms）
+  const lastMs = localStorage.getItem('notion-last-fetch-ms');
+  if (!lastMs || Date.now() - Number(lastMs) > 86400000) {
+    fetchFromNotion();
+  }
+})();
+
+// fetchFromNotionのタイムスタンプをms単位でも保存
+const _origFetch = fetchFromNotion;
+fetchFromNotion = async function() {
+  await _origFetch();
+  localStorage.setItem('notion-last-fetch-ms', Date.now());
+};
 </script>
 </body>
 </html>
