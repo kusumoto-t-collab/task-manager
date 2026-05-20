@@ -1087,30 +1087,53 @@
 
 <!-- クイック追加モーダル -->
 <div class="modal-overlay" id="quick-add-modal">
-  <div class="modal" style="max-width: 580px;">
+  <div class="modal" style="max-width: 600px;">
     <div class="modal-title">⚡ クイック追加</div>
-    <div style="font-size: 12px; color: var(--text2); margin-bottom: 10px; line-height: 1.7;">
-      口頭・LINEで降ってきたタスクをそのまま打ち込んでください。<br>
-      <span style="color: var(--text3);">期日・カテゴリ・優先度・出典が自動で抽出されます。改行で区切ると複数タスクを一度に追加できます。</span>
-    </div>
-    <details style="margin-bottom:12px;">
-      <summary style="font-size:11px; color: var(--text3); cursor:pointer;">💡 入力例</summary>
-      <div style="background: var(--surface2); border: 1px solid var(--border); border-radius: 7px; padding: 10px; margin-top: 6px; font-size: 12px; color: var(--text2); line-height: 1.8;">
-        ・<code>明日までにメイカさんに連絡 緊急 PBGH LINE橋本</code><br>
-        ・<code>5/25 池田と素材確認 プロダクト</code><br>
-        ・<code>来週 サロン向けEC打診 高 unique 口頭</code>
-      </div>
-    </details>
-    <textarea class="form-textarea" id="quick-input" style="min-height: 130px; font-size: 14px;" placeholder="例: 明日までにメイカさんに連絡 緊急 PBGH LINE&#10;5/25 池田と素材確認 プロダクト" oninput="updateQuickPreview()"></textarea>
 
+    <!-- タブ切替 -->
+    <div class="tabs" style="margin-bottom: 16px;">
+      <button class="tab active" id="qtab-text-btn" onclick="switchQuickTab('text')">✏️ テキスト入力</button>
+      <button class="tab" id="qtab-notion-btn" onclick="switchQuickTab('notion')">📄 議事録URLから抽出</button>
+    </div>
+
+    <!-- テキスト入力タブ -->
+    <div id="qtab-text">
+      <div style="font-size: 12px; color: var(--text2); margin-bottom: 10px; line-height: 1.7;">
+        口頭・LINEで降ってきたタスクをそのまま打ち込んでください。<br>
+        <span style="color: var(--text3);">期日・カテゴリ・優先度・出典が自動で抽出されます。改行で区切ると複数タスクを一度に追加できます。</span>
+      </div>
+      <details style="margin-bottom:12px;">
+        <summary style="font-size:11px; color: var(--text3); cursor:pointer;">💡 入力例</summary>
+        <div style="background: var(--surface2); border: 1px solid var(--border); border-radius: 7px; padding: 10px; margin-top: 6px; font-size: 12px; color: var(--text2); line-height: 1.8;">
+          ・<code>明日までにメイカさんに連絡 緊急 PBGH LINE橋本</code><br>
+          ・<code>5/25 池田と素材確認 プロダクト</code><br>
+          ・<code>来週 サロン向けEC打診 高 unique 口頭</code>
+        </div>
+      </details>
+      <textarea class="form-textarea" id="quick-input" style="min-height: 130px; font-size: 14px;" placeholder="例: 明日までにメイカさんに連絡 緊急 PBGH LINE&#10;5/25 池田と素材確認 プロダクト" oninput="updateQuickPreview()"></textarea>
+    </div>
+
+    <!-- 議事録URL抽出タブ -->
+    <div id="qtab-notion" style="display:none;">
+      <div style="font-size: 12px; color: var(--text2); margin-bottom: 12px; line-height: 1.7;">
+        NotionページのURLを貼り付けてください。<br>
+        <span style="color: var(--text3);">「〜〜〜　楠元」パターンの行を自動で抽出します。Notion Tokenが必要です。</span>
+      </div>
+      <input type="text" class="form-input" id="notion-page-url" placeholder="https://www.notion.so/..." style="margin-bottom: 10px;">
+      <button class="btn btn-secondary" style="width:100%; justify-content:center;" onclick="extractFromNotionPage()">
+        <span id="extract-btn-text">📄 ページを読み込んでタスク抽出</span>
+      </button>
+    </div>
+
+    <!-- 共通プレビュー -->
     <div id="quick-preview" style="margin-top: 14px; display: none;">
-      <div style="font-size: 11px; color: var(--text3); font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; margin-bottom: 8px;">抽出結果プレビュー</div>
-      <div id="quick-preview-list"></div>
+      <div style="font-size: 11px; color: var(--text3); font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; margin-bottom: 8px;">抽出結果 <span id="preview-count"></span></div>
+      <div id="quick-preview-list" style="max-height: 260px; overflow-y: auto;"></div>
     </div>
 
     <div class="modal-actions">
       <button class="btn btn-secondary" onclick="closeModal('quick-add-modal')">キャンセル</button>
-      <button class="btn btn-primary" onclick="submitQuickAdd()">タスク追加</button>
+      <button class="btn btn-primary" id="quick-add-submit-btn" onclick="submitQuickAdd()">タスク追加</button>
     </div>
   </div>
 </div>
@@ -1625,19 +1648,27 @@ function parseQuickInputAll(rawText) {
     .filter(t => t !== null);
 }
 
-function updateQuickPreview() {
-  const text = document.getElementById('quick-input').value;
+let _quickTabMode = 'text';
+let _extractedTasks = [];
+
+function switchQuickTab(mode) {
+  _quickTabMode = mode;
+  document.getElementById('qtab-text').style.display = mode === 'text' ? 'block' : 'none';
+  document.getElementById('qtab-notion').style.display = mode === 'notion' ? 'block' : 'none';
+  document.getElementById('qtab-text-btn').classList.toggle('active', mode === 'text');
+  document.getElementById('qtab-notion-btn').classList.toggle('active', mode === 'notion');
+  document.getElementById('quick-preview').style.display = 'none';
+  _extractedTasks = [];
+}
+
+function renderPreview(tasks) {
   const previewBox = document.getElementById('quick-preview');
   const listEl = document.getElementById('quick-preview-list');
-  const parsed = parseQuickInputAll(text);
-
-  if (parsed.length === 0) {
-    previewBox.style.display = 'none';
-    return;
-  }
+  const countEl = document.getElementById('preview-count');
+  if (tasks.length === 0) { previewBox.style.display = 'none'; return; }
   previewBox.style.display = 'block';
-
-  listEl.innerHTML = parsed.map((t, i) => `
+  countEl.textContent = `${tasks.length}件`;
+  listEl.innerHTML = tasks.map(t => `
     <div style="background: var(--surface2); border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; margin-bottom: 6px;">
       <div style="font-size: 13px; font-weight: 500; color: var(--text); margin-bottom: 6px;">${escHtml(t.name)}</div>
       <div style="display:flex; flex-wrap:wrap; gap:5px;">
@@ -1651,19 +1682,153 @@ function updateQuickPreview() {
   `).join('');
 }
 
+function updateQuickPreview() {
+  const text = document.getElementById('quick-input').value;
+  const parsed = parseQuickInputAll(text);
+  _extractedTasks = parsed;
+  renderPreview(parsed);
+}
+
+// ========================================
+// 議事録URLからタスク抽出
+// ========================================
+function extractPageIdFromUrl(url) {
+  // https://www.notion.so/PageTitle-xxxxxxxx or https://www.notion.so/xxxxxxxx?v=...
+  const m = url.match(/([a-f0-9]{32})(?:[?#]|$)/i)
+           || url.match(/([a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})/i);
+  if (!m) return null;
+  const id = m[1].replace(/-/g, '');
+  return `${id.slice(0,8)}-${id.slice(8,12)}-${id.slice(12,16)}-${id.slice(16,20)}-${id.slice(20)}`;
+}
+
+async function fetchAllBlocks(blockId, token) {
+  let results = [];
+  let cursor;
+  do {
+    const params = new URLSearchParams({ page_size: '100' });
+    if (cursor) params.set('start_cursor', cursor);
+    const res = await fetch(`https://api.notion.com/v1/blocks/${blockId}/children?${params}`, {
+      headers: { 'Authorization': `Bearer ${token}`, 'Notion-Version': '2022-06-28' }
+    });
+    const data = await res.json();
+    if (!data.results) throw new Error(data.message || 'ブロック取得失敗');
+    results = results.concat(data.results);
+    cursor = data.has_more ? data.next_cursor : null;
+  } while (cursor);
+  return results;
+}
+
+function blockToText(block) {
+  const type = block.type;
+  const content = block[type];
+  if (!content || !content.rich_text) return '';
+  return content.rich_text.map(r => r.plain_text).join('');
+}
+
+async function getAllTextLines(pageId, token) {
+  const lines = [];
+  async function traverse(id) {
+    const blocks = await fetchAllBlocks(id, token);
+    for (const b of blocks) {
+      const text = blockToText(b).trim();
+      if (text) lines.push(text);
+      if (b.has_children) await traverse(b.id);
+    }
+  }
+  await traverse(pageId);
+  return lines;
+}
+
+function extractTasksFromLines(lines, sourceName) {
+  const extracted = [];
+  // 「楠元」が行末（または末尾近く）にあるパターン
+  const pattern = /楠元/;
+  for (const line of lines) {
+    if (!pattern.test(line)) continue;
+    // 楠元より前をタスク名として取得
+    let taskName = line
+      .replace(/楠元.*$/, '')           // 楠元以降を削除
+      .replace(/^[・\-\s　]+/, '')       // 先頭の記号を削除
+      .replace(/[\s　]+$/, '')           // 末尾スペース削除
+      .trim();
+    if (!taskName) continue;
+    // 自然文パースで期日・領域などを抽出
+    const parsed = parseQuickInput(taskName + ' ' + sourceName);
+    if (parsed) {
+      parsed.source = sourceName;
+      extracted.push(parsed);
+    }
+  }
+  return extracted;
+}
+
+async function extractFromNotionPage() {
+  const token = getToken();
+  if (!token) { toast('サイドバーにNotion Tokenを設定してください', 'error'); return; }
+
+  const url = document.getElementById('notion-page-url').value.trim();
+  if (!url) { toast('URLを入力してください', 'error'); return; }
+
+  const pageId = extractPageIdFromUrl(url);
+  if (!pageId) { toast('有効なNotionページURLを入力してください', 'error'); return; }
+
+  const btn = document.getElementById('extract-btn-text');
+  btn.textContent = '読み込み中...';
+
+  try {
+    // ページタイトル取得
+    const pageRes = await fetch(`https://api.notion.com/v1/pages/${pageId}`, {
+      headers: { 'Authorization': `Bearer ${token}`, 'Notion-Version': '2022-06-28' }
+    });
+    const pageData = await pageRes.json();
+    if (!pageData.id) throw new Error(pageData.message || 'ページ取得失敗');
+
+    // タイトル抽出
+    const titleProp = Object.values(pageData.properties || {}).find(p => p.type === 'title');
+    const sourceName = titleProp
+      ? (titleProp.title || []).map(t => t.plain_text).join('').trim()
+      : 'Notion議事録';
+
+    // 全テキスト行を取得
+    const lines = await getAllTextLines(pageId, token);
+    const extracted = extractTasksFromLines(lines, sourceName);
+
+    _extractedTasks = extracted;
+    renderPreview(extracted);
+
+    if (extracted.length === 0) {
+      toast('「楠元」が含まれる行が見つかりませんでした', 'error');
+    } else {
+      toast(`${extracted.length}件のタスクを検出しました`, 'success');
+    }
+  } catch (e) {
+    console.error(e);
+    toast('ページ取得に失敗しました: ' + e.message, 'error');
+  } finally {
+    btn.textContent = '📄 ページを読み込んでタスク抽出';
+  }
+}
+
 function openQuickAddModal() {
   document.getElementById('quick-input').value = '';
+  document.getElementById('notion-page-url').value = '';
   document.getElementById('quick-preview').style.display = 'none';
+  _extractedTasks = [];
+  switchQuickTab('text');
   document.getElementById('quick-add-modal').classList.add('open');
   setTimeout(() => document.getElementById('quick-input').focus(), 100);
 }
 
 function submitQuickAdd() {
-  const text = document.getElementById('quick-input').value;
-  const parsed = parseQuickInputAll(text);
-  if (parsed.length === 0) { toast('入力内容を確認してください', 'error'); return; }
+  // テキストタブの場合は現在の入力を再パース
+  if (_quickTabMode === 'text') {
+    const text = document.getElementById('quick-input').value;
+    _extractedTasks = parseQuickInputAll(text);
+  }
 
-  parsed.forEach(p => {
+  if (_extractedTasks.length === 0) { toast('追加するタスクがありません', 'error'); return; }
+
+  _extractedTasks.forEach(p => {
     tasks.unshift({
       id: 't' + Date.now() + Math.random().toString(36).slice(2,6),
       name: p.name,
@@ -1677,10 +1842,12 @@ function submitQuickAdd() {
     });
   });
 
+  const count = _extractedTasks.length;
+  _extractedTasks = [];
   saveData();
   closeModal('quick-add-modal');
   renderTasks();
-  toast(`${parsed.length}件のタスクを追加しました`, 'success');
+  toast(`${count}件のタスクを追加しました`, 'success');
 }
 
 // ========================================
