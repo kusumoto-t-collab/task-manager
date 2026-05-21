@@ -1919,7 +1919,7 @@ function parseQuickInput(line) {
   if (!text) return null;
 
   const original = text;
-  const extracted = { source: '', deadline: '', priority: '中', domain: '', status: '未着手' };
+  const extracted = { source: '', deadline: '', priority: '中', domain: '', status: '未着手', note: '' };
 
   // ① 期日を抽出
   const today = new Date(); today.setHours(0,0,0,0);
@@ -1928,6 +1928,22 @@ function parseQuickInput(line) {
   let m;
   if ((m = text.match(/(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})/))) {
     extracted.deadline = `${m[1]}-${String(m[2]).padStart(2,'0')}-${String(m[3]).padStart(2,'0')}`;
+    text = text.replace(m[0], '');
+  } else if ((m = text.match(/(\d{1,2})月末/))) {
+    // 「5月末」→ その月の末日。指定月が過去なら翌年
+    const mo = Number(m[1]);
+    const y = mo < today.getMonth() + 1 ? today.getFullYear() + 1 : today.getFullYear();
+    extracted.deadline = fmt(new Date(y, mo, 0));
+    text = text.replace(m[0], '');
+  } else if ((m = text.match(/(\d{1,2})月中旬/))) {
+    const mo = Number(m[1]);
+    const y = mo < today.getMonth() + 1 ? today.getFullYear() + 1 : today.getFullYear();
+    extracted.deadline = `${y}-${String(mo).padStart(2,'0')}-20`;
+    text = text.replace(m[0], '');
+  } else if ((m = text.match(/(\d{1,2})月上旬/))) {
+    const mo = Number(m[1]);
+    const y = mo < today.getMonth() + 1 ? today.getFullYear() + 1 : today.getFullYear();
+    extracted.deadline = `${y}-${String(mo).padStart(2,'0')}-10`;
     text = text.replace(m[0], '');
   } else if ((m = text.match(/(\d{1,2})[\/\-](\d{1,2})(?!\d)/))) {
     const y = today.getFullYear();
@@ -1975,8 +1991,8 @@ function parseQuickInput(line) {
     extracted.deadline = fmt(d);
     text = text.replace(m[0], '');
   }
-  // 「〇〇まで」パターン（日付抽出後に残った「まで」を除去）
-  text = text.replace(/まで(に)?/, '');
+  // 「〇〇まで(に)」の「まで(に)」を除去
+  text = text.replace(/までに?/, '');
 
   // ② 優先度
   for (const [pri, kws] of Object.entries(PRIORITY_KEYWORDS)) {
@@ -1989,15 +2005,16 @@ function parseQuickInput(line) {
     }
   }
 
-  // ③ ステータス
+  // ③ ステータス（後続の助詞「で・が・を」も含めて除去）
   for (const [st, kws] of Object.entries(STATUS_KEYWORDS)) {
     for (const kw of kws) {
       if (text.includes(kw)) {
         extracted.status = st;
-        text = text.replace(kw, '');
+        text = text.replace(new RegExp(kw + '[でがをにはも]?'), '');
         break;
       }
     }
+    if (extracted.status !== '未着手') break;
   }
 
   // ④ 領域（カテゴリ）
@@ -2021,7 +2038,33 @@ function parseQuickInput(line) {
     extracted.source = '口頭・LINE等';
   }
 
-  const name = text.replace(/\s+/g, ' ').replace(/^[\s,、。・]+|[\s,、。・]+$/g, '').trim();
+  // ⑥ コンテキスト（メモ）の分離
+  // 全角スペース・句点でセグメント分割し、状況説明的なフラグメントをnoteへ移す
+  const rawSegments = text.split(/[　。]/).map(s => s.trim()).filter(Boolean);
+  const taskParts = [];
+  const noteParts = [];
+  for (const seg of rawSegments) {
+    const isContext = /^[でが]/.test(seg) ||
+                      (/さん/.test(seg) && /待ち|確認中|状況|受け取り|依頼/.test(seg)) ||
+                      /待ちです$/.test(seg) ||
+                      /状況です$/.test(seg) ||
+                      /受け取り待ち/.test(seg);
+    if (isContext && taskParts.length > 0) {
+      noteParts.push(seg.replace(/^[でが]今?/, '').trim());
+    } else {
+      taskParts.push(seg);
+    }
+  }
+  text = taskParts.join(' ');
+  if (noteParts.length > 0) extracted.note = noteParts.join('　');
+
+  // ⑦ タスク名末尾の動詞句を除去してシンプルな名詞句に
+  text = text
+    .replace(/を(?:完了|実施|実行|達成|確認|進行|対応|処理|登録|更新|設定|整理|作成|送付|提出|報告|連絡|依頼)(?:する|させる|行う|します)?$/, '')
+    .replace(/(?:する|します|行う|進める|対応する|対応します|行います)$/, '')
+    .trim();
+
+  const name = text.replace(/\s+/g, ' ').replace(/^[\s,、。・　]+|[\s,、。・　]+$/g, '').trim();
   if (!name) return null;
 
   return { name, ...extracted, original };
@@ -2065,6 +2108,7 @@ function renderPreview(tasks) {
         <span class="badge" style="background:#f3f4f7; color: var(--text3); border:1px solid var(--border);">出典: ${escHtml(t.source)}</span>
         ${t.confidence === 'low' ? '<span class="badge" style="background:#fff3e0; color:var(--warn); border:1px solid var(--warn);">⚠ 要確認</span>' : ''}
       </div>
+      ${t.note ? `<div style="font-size:12px; color:var(--text3); margin-top:5px; padding-top:5px; border-top:1px solid var(--border);">📝 ${escHtml(t.note)}</div>` : ''}
     </div>
   `).join('');
 }
@@ -2309,7 +2353,7 @@ function submitQuickAdd() {
       status: p.status,
       priority: p.priority,
       domain: p.domain,
-      note: '',
+      note: p.note || '',
       notionId: null
     });
   });
