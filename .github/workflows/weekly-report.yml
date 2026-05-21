@@ -1,0 +1,22 @@
+name: Weekly Task Report
+
+on:
+  schedule:
+    - cron: '0 0 * * 1'  # 毎週月曜 9:00 JST (UTC 月曜 0:00)
+  workflow_dispatch:         # 手動実行ボタンも有効
+
+jobs:
+  report:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: 週次レポート生成 → Slack通知
+        run: node scripts/weekly-report.js
+        env:
+          NOTION_TOKEN:      ${{ secrets.NOTION_TOKEN }}
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}

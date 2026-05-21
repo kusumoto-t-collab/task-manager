@@ -154,6 +154,50 @@ function inferPriority(text) {
   return '中';
 }
 
+// 締切日の抽出
+// 高信頼度のパターンのみ対応：
+//   - 完全な日付: 2026/5/21, 2026年5月21日
+//   - M/D + 期限マーカー: 「5/21まで」「期限：5/21」「5月21日締切」
+// 「明日」「来週」等の相対表現は誤判定リスクが高いため対象外
+function parseDeadline(text, baseDate = new Date()) {
+  // パターン1: 完全な年月日（最も信頼できる）
+  let m = text.match(/(20\d{2})[\/年\-](\d{1,2})[\/月\-](\d{1,2})日?/);
+  if (m) {
+    const y = +m[1], mo = +m[2], d = +m[3];
+    if (isValidDate(y, mo, d)) return formatDate(y, mo, d);
+  }
+
+  // パターン2: M/D（期限マーカーが文中にある場合のみ採用）
+  const hasMarker = /(まで|までに|〆切|締切|期限)/.test(text);
+  if (!hasMarker) return null;
+
+  m = text.match(/(\d{1,2})[\/月](\d{1,2})日?/);
+  if (m) {
+    const mo = +m[1], d = +m[2];
+    if (!isValidDate(2000, mo, d)) return null; // 年は仮で形だけチェック
+    const year = baseDate.getFullYear();
+    const candidate = new Date(year, mo - 1, d);
+    // 30日以上過去なら来年と判断
+    const grace = 30 * 86400000;
+    if (candidate.getTime() < baseDate.getTime() - grace) {
+      return formatDate(year + 1, mo, d);
+    }
+    return formatDate(year, mo, d);
+  }
+
+  return null;
+}
+
+function isValidDate(y, m, d) {
+  if (m < 1 || m > 12 || d < 1 || d > 31) return false;
+  const dt = new Date(y, m - 1, d);
+  return dt.getFullYear() === y && dt.getMonth() === m - 1 && dt.getDate() === d;
+}
+
+function formatDate(y, m, d) {
+  return `${y}-${String(m).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+}
+
 function cleanTaskName(line) {
   return line
     .replace(/[\s　]*楠元[\s　]*$/g, '')
@@ -198,11 +242,14 @@ function extractKusumotoTasks(blocks, sourceName) {
     if (seen.has(key)) continue;
     seen.add(key);
 
+    const deadline = parseDeadline(text);
+
     extracted.push({
       name,
       source: sourceName,
       priority: inferPriority(text),
       domain: inferDomain(name),
+      deadline,
     });
   }
 
