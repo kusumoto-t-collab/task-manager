@@ -1,0 +1,22 @@
+name: Daily Minutes Task Scan
+
+on:
+  schedule:
+    - cron: '0 0 * * 1-5'  # 平日毎朝 9:00 JST (UTC 0:00)
+  workflow_dispatch:         # 手動実行ボタンも有効
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: 議事録スキャン → タスク自動登録
+        run: node scripts/scan-minutes.js
+        env:
+          NOTION_TOKEN:      ${{ secrets.NOTION_TOKEN }}
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
