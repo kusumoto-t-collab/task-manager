@@ -1205,20 +1205,19 @@
   <div class="modal">
     <div class="modal-title">議事録追加</div>
     <div class="form-group">
-      <label class="form-label">議事録名 *</label>
-      <input type="text" class="form-input" id="new-minutes-title" placeholder="例: 【役員】プロダクト定例（2026/05/26）">
+      <label class="form-label">NotionページURL *</label>
+      <input type="text" class="form-input" id="new-minutes-url" placeholder="https://notion.so/..."
+        oninput="onMinutesUrlInput()">
+      <div id="minutes-fetch-status" style="font-size:12px; margin-top:6px; min-height:18px; color:var(--text3);"></div>
     </div>
-    <div class="form-group">
-      <label class="form-label">実施日 *</label>
-      <input type="date" class="form-input" id="new-minutes-date">
-    </div>
-    <div class="form-group">
-      <label class="form-label">NotionページURL</label>
-      <input type="text" class="form-input" id="new-minutes-url" placeholder="https://notion.so/...">
+    <div id="minutes-preview" style="display:none; background:var(--surface2); border:1px solid var(--border); border-radius:8px; padding:12px; margin-bottom:12px;">
+      <div style="font-size:12px; color:var(--text3); margin-bottom:4px;">取得内容</div>
+      <div style="font-size:13px; font-weight:600; color:var(--text);" id="minutes-preview-title"></div>
+      <div style="font-size:12px; color:var(--text2); margin-top:2px;" id="minutes-preview-date"></div>
     </div>
     <div class="modal-actions">
       <button class="btn btn-secondary" onclick="closeModal('minutes-modal')">キャンセル</button>
-      <button class="btn btn-primary" onclick="addMinutes()">追加</button>
+      <button class="btn btn-primary" id="minutes-add-btn" onclick="addMinutes()" disabled style="opacity:0.5;">追加</button>
     </div>
   </div>
 </div>
@@ -2163,28 +2162,100 @@ function deleteTaskFromModal() {
 // ========================================
 // 議事録追加
 // ========================================
+let _minutesFetched = null; // { title, date, url }
+let _minutesFetchTimer = null;
+
 function openMinutesModal() {
+  _minutesFetched = null;
+  document.getElementById('new-minutes-url').value = '';
+  document.getElementById('minutes-fetch-status').textContent = '';
+  document.getElementById('minutes-preview').style.display = 'none';
+  document.getElementById('minutes-add-btn').disabled = true;
+  document.getElementById('minutes-add-btn').style.opacity = '0.5';
   document.getElementById('minutes-modal').classList.add('open');
+  setTimeout(() => document.getElementById('new-minutes-url').focus(), 80);
+}
+
+function onMinutesUrlInput() {
+  clearTimeout(_minutesFetchTimer);
+  _minutesFetched = null;
+  document.getElementById('minutes-preview').style.display = 'none';
+  document.getElementById('minutes-add-btn').disabled = true;
+  document.getElementById('minutes-add-btn').style.opacity = '0.5';
+
+  const url = document.getElementById('new-minutes-url').value.trim();
+  if (!url) { document.getElementById('minutes-fetch-status').textContent = ''; return; }
+
+  const pageId = extractPageIdFromUrl(url);
+  if (!pageId) {
+    document.getElementById('minutes-fetch-status').textContent = '有効なNotionページURLを入力してください';
+    document.getElementById('minutes-fetch-status').style.color = 'var(--danger)';
+    return;
+  }
+
+  document.getElementById('minutes-fetch-status').textContent = '読み込み中...';
+  document.getElementById('minutes-fetch-status').style.color = 'var(--text3)';
+  // 入力が止まって400ms後に取得
+  _minutesFetchTimer = setTimeout(() => fetchMinutesPage(pageId, url), 400);
+}
+
+async function fetchMinutesPage(pageId, originalUrl) {
+  const token = getToken();
+  if (!token) {
+    document.getElementById('minutes-fetch-status').textContent = 'サイドバーでNotion Tokenを設定してください';
+    document.getElementById('minutes-fetch-status').style.color = 'var(--danger)';
+    return;
+  }
+
+  try {
+    const res = await notionFetch(`/v1/pages/${pageId}`, {
+      headers: { 'Authorization': `Bearer ${token}`, 'Notion-Version': '2022-06-28' }
+    });
+    const data = await res.json();
+    if (!data.id) throw new Error(data.message || 'ページ取得失敗');
+
+    // タイトル抽出
+    const titleProp = Object.values(data.properties || {}).find(p => p.type === 'title');
+    const title = titleProp
+      ? (titleProp.title || []).map(t => t.plain_text).join('').trim()
+      : '';
+
+    // 日付抽出：最終編集日 or ページ作成日 or タイトルから正規表現
+    let date = '';
+    const dateFromTitle = title.match(/(\d{4})[\/\-年](\d{1,2})[\/\-月](\d{1,2})/);
+    if (dateFromTitle) {
+      date = `${dateFromTitle[1]}-${dateFromTitle[2].padStart(2,'0')}-${dateFromTitle[3].padStart(2,'0')}`;
+    } else if (data.last_edited_time) {
+      date = data.last_edited_time.slice(0, 10);
+    } else if (data.created_time) {
+      date = data.created_time.slice(0, 10);
+    }
+
+    _minutesFetched = { title: title || 'タイトルなし', date, url: originalUrl };
+
+    document.getElementById('minutes-preview-title').textContent = _minutesFetched.title;
+    document.getElementById('minutes-preview-date').textContent = date ? `実施日: ${date}` : '実施日: 取得できませんでした（後で確認を）';
+    document.getElementById('minutes-preview').style.display = 'block';
+    document.getElementById('minutes-fetch-status').textContent = '✅ 取得しました';
+    document.getElementById('minutes-fetch-status').style.color = 'var(--success)';
+    document.getElementById('minutes-add-btn').disabled = false;
+    document.getElementById('minutes-add-btn').style.opacity = '1';
+  } catch (e) {
+    document.getElementById('minutes-fetch-status').textContent = '取得失敗: ' + e.message;
+    document.getElementById('minutes-fetch-status').style.color = 'var(--danger)';
+  }
 }
 
 function addMinutes() {
-  const title = document.getElementById('new-minutes-title').value.trim();
-  const date = document.getElementById('new-minutes-date').value;
-  if (!title || !date) { toast('議事録名と日付を入力してください', 'error'); return; }
+  if (!_minutesFetched) return;
+  const { title, date, url } = _minutesFetched;
 
-  minutes.unshift({
-    title,
-    date,
-    url: document.getElementById('new-minutes-url').value
-  });
+  minutes.unshift({ title, date: date || '', url });
   saveMinutesData();
   closeModal('minutes-modal');
   renderMinutes();
   toast('議事録を追加しました', 'success');
-
-  ['new-minutes-title', 'new-minutes-date', 'new-minutes-url'].forEach(id => {
-    document.getElementById(id).value = '';
-  });
+  _minutesFetched = null;
 }
 
 function deleteMinutes(index) {
