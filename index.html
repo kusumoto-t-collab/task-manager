@@ -1078,6 +1078,18 @@
     </div>
 
     <div class="sidebar-section">
+      <div class="sidebar-label">優先タスク</div>
+      <button class="filter-btn" onclick="setFilter('due-soon', this)">
+        <span>🔥 7日以内期限</span>
+        <span class="filter-count" id="fc-due-soon">0</span>
+      </button>
+      <button class="filter-btn" onclick="setFilter('no-deadline', this)">
+        <span>📭 期日未設定</span>
+        <span class="filter-count" id="fc-no-deadline">0</span>
+      </button>
+    </div>
+
+    <div class="sidebar-section">
       <div class="sidebar-label">領域</div>
       <button class="filter-btn" onclick="setFilter('domain:プロダクト', this)">プロダクト</button>
       <button class="filter-btn" onclick="setFilter('domain:PBGH', this)">PBGH</button>
@@ -1534,9 +1546,22 @@ function renderTasks() {
   const list = document.getElementById('task-list');
   const searchVal = document.getElementById('search-input').value.toLowerCase();
 
+  const todayForFilter = new Date();
+  todayForFilter.setHours(0,0,0,0);
+  const sevenDaysLater = new Date(todayForFilter);
+  sevenDaysLater.setDate(sevenDaysLater.getDate() + 7);
+  const todayStr = todayForFilter.toISOString().slice(0, 10);
+  const sevenDaysStr = sevenDaysLater.toISOString().slice(0, 10);
+
   let filtered = tasks.filter(t => {
     if (searchVal && !t.name.toLowerCase().includes(searchVal) && !t.source.toLowerCase().includes(searchVal)) return false;
-    if (currentFilter === 'all') return t.status !== '完了';
+    if (t.status === '完了') {
+      // 完了フィルター以外では完了タスクを除外
+      return currentFilter === '完了';
+    }
+    if (currentFilter === 'all') return true;
+    if (currentFilter === 'due-soon') return t.deadline && t.deadline <= sevenDaysStr;
+    if (currentFilter === 'no-deadline') return !t.deadline;
     if (currentFilter.startsWith('domain:')) return t.domain === currentFilter.replace('domain:', '');
     return t.status === currentFilter;
   });
@@ -1753,6 +1778,14 @@ function updateFilterCounts() {
   document.getElementById('fc-inprogress').textContent = tasks.filter(t => t.status === '進行中').length;
   document.getElementById('fc-done').textContent = tasks.filter(t => t.status === '完了').length;
   document.getElementById('fc-hold').textContent = tasks.filter(t => t.status === '保留').length;
+
+  const today2 = new Date(); today2.setHours(0,0,0,0);
+  const soon = new Date(today2); soon.setDate(soon.getDate() + 7);
+  const soonStr = soon.toISOString().slice(0, 10);
+  document.getElementById('fc-due-soon').textContent =
+    tasks.filter(t => t.status !== '完了' && t.deadline && t.deadline <= soonStr).length;
+  document.getElementById('fc-no-deadline').textContent =
+    tasks.filter(t => t.status !== '完了' && !t.deadline).length;
 }
 
 function renderMinutes() {
@@ -1781,6 +1814,7 @@ function setFilter(filter, btn) {
   btn.classList.add('active');
   const labels = {
     all: 'すべてのタスク', 'アラート': '⚠️ アラート', '未着手': '未着手', '進行中': '進行中', '完了': '✅ 完了', '保留': '保留',
+    'due-soon': '🔥 7日以内期限', 'no-deadline': '📭 期日未設定',
     'domain:プロダクト': 'プロダクト', 'domain:PBGH': 'PBGH', 'domain:総務': '総務', 'domain:unique': 'unique'
   };
   document.getElementById('filter-label').textContent = labels[filter] || filter;
