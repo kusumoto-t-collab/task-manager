@@ -4,6 +4,11 @@ on:
   schedule:
     - cron: '0 0 * * 1-5'  # 平日毎朝 9:00 JST (UTC 0:00)
   workflow_dispatch:         # 手動実行ボタンも有効
+    inputs:
+      page_url:
+        description: '議事録のURL（指定するとこのページだけを再スキャン）'
+        required: false
+        type: string
 
 jobs:
   scan:
@@ -20,3 +25,4 @@ jobs:
         env:
           NOTION_TOKEN:      ${{ secrets.NOTION_TOKEN }}
           SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+          PAGE_URL:          ${{ inputs.page_url }}
