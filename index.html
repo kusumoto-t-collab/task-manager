@@ -975,6 +975,49 @@
     border-top: 1px solid var(--border);
   }
 
+  /* 期日インライン入力（期日未設定タスク用） */
+  .inline-deadline-input {
+    font-family: 'DM Mono', monospace;
+    font-size: 11px;
+    padding: 2px 6px;
+    border: 1px solid var(--warn);
+    border-radius: 2px;
+    background: #fef3c7;
+    color: var(--warn);
+    cursor: pointer;
+    outline: none;
+    animation: deadline-pulse 2.5s ease-in-out infinite;
+    min-width: 130px;
+  }
+  .inline-deadline-input:hover {
+    background: #fde68a;
+  }
+  .inline-deadline-input:focus {
+    animation: none;
+    background: #fff;
+    border-color: var(--accent);
+    color: var(--text);
+  }
+  @keyframes deadline-pulse {
+    0%, 100% { background: #fef3c7; border-color: var(--warn); box-shadow: 0 0 0 0 rgba(217,119,6,0.0); }
+    50%      { background: #fde68a; border-color: #b45309; box-shadow: 0 0 0 3px rgba(217,119,6,0.18); }
+  }
+
+  /* 期日未設定フィルター（残件がある場合に点滅） */
+  .filter-btn.pulse-warn {
+    color: var(--warn);
+    animation: filter-pulse 2.5s ease-in-out infinite;
+  }
+  .filter-btn.pulse-warn .filter-count {
+    background: var(--warn);
+    color: #fff;
+    font-weight: 700;
+  }
+  @keyframes filter-pulse {
+    0%, 100% { background: transparent; }
+    50%      { background: #fef3c7; }
+  }
+
   /* パネルオーバーレイ（クリックで閉じる用） */
   .detail-panel-backdrop {
     display: none;
@@ -1599,7 +1642,9 @@ function renderTasks() {
             ${minutesUrl
               ? `<a href="${escHtml(minutesUrl)}" target="_blank" rel="noopener noreferrer" class="badge badge-source" style="text-decoration:none;" onclick="event.stopPropagation()">📄 ${escHtml(task.source)}</a>`
               : `<span class="badge badge-source">${escHtml(task.source)}</span>`}
-            ${task.deadline ? `<span class="badge ${isOverdue(task.deadline) ? 'badge-deadline' : 'badge-deadline-ok'}">${task.deadline}${isOverdue(task.deadline) ? ' ⚠️' : ''}</span>` : ''}
+            ${task.deadline
+              ? `<span class="badge ${isOverdue(task.deadline) ? 'badge-deadline' : 'badge-deadline-ok'}">${task.deadline}${isOverdue(task.deadline) ? ' ⚠️' : ''}</span>`
+              : `<input type="date" class="inline-deadline-input" value="" onclick="event.stopPropagation()" onchange="setTaskDeadline('${task.id}', this.value)" title="期日を設定">`}
             ${task.notionId ? '<span class="badge" style="background: #edf7f4; color: var(--accent2); border: 1px solid #b0ddd0;">Notion✓</span>' : ''}
           </div>
         </div>
@@ -1730,6 +1775,18 @@ function markDirty(task) {
   else task.localDirty = false;
 }
 
+function setTaskDeadline(id, value) {
+  const task = tasks.find(t => t.id === id);
+  if (!task || !value) return;
+  task.deadline = value;
+  if (task.notionId && !getToken()) task.localDirty = true;
+  saveData();
+  renderTasks();
+  toast(`期日を ${value} に設定しました`, 'success');
+  if (currentDetailTaskId === id) populateDetailPanel(task);
+  if (getToken() && task.notionId) syncTaskToNotion(id, true);
+}
+
 function updateStatus(id, status) {
   const task = tasks.find(t => t.id === id);
   if (task) {
@@ -1784,8 +1841,14 @@ function updateFilterCounts() {
   const soonStr = soon.toISOString().slice(0, 10);
   document.getElementById('fc-due-soon').textContent =
     tasks.filter(t => t.status !== '完了' && t.deadline && t.deadline <= soonStr).length;
-  document.getElementById('fc-no-deadline').textContent =
-    tasks.filter(t => t.status !== '完了' && !t.deadline).length;
+  const noDeadlineCount = tasks.filter(t => t.status !== '完了' && !t.deadline).length;
+  document.getElementById('fc-no-deadline').textContent = noDeadlineCount;
+
+  // 期日未設定が残っているなら、フィルターボタンを点滅させる
+  const noDeadlineBtn = document.getElementById('fc-no-deadline').closest('.filter-btn');
+  if (noDeadlineBtn) {
+    noDeadlineBtn.classList.toggle('pulse-warn', noDeadlineCount > 0);
+  }
 }
 
 function renderMinutes() {
