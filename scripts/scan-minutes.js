@@ -7,6 +7,7 @@
 
 const NOTION_TOKEN      = process.env.NOTION_TOKEN;
 const SLACK_WEBHOOK_URL = process.env.SLACK_WEBHOOK_URL;
+const PAGE_URL          = process.env.PAGE_URL; // 指定時はこのページのみ再スキャン
 
 if (!NOTION_TOKEN) {
   console.error('NOTION_TOKEN が設定されていません');
@@ -76,9 +77,13 @@ async function getAllBlocksWithMeta(pageId, depth = 0) {
   for (const b of raw) {
     const type = b.type;
     const content = b[type];
-    const text = (content?.rich_text || []).map(r => r.plain_text).join('').trim();
+    const richText = content?.rich_text || [];
+    const text = richText.map(r => r.plain_text).join('').trim();
+    const mentionedUserIds = richText
+      .filter(r => r.type === 'mention' && r.mention?.type === 'user')
+      .map(r => r.mention.user.id);
     const checked = type === 'to_do' ? (content?.checked ?? false) : null;
-    blocks.push({ text, type, checked, depth });
+    blocks.push({ text, type, checked, depth, mentionedUserIds });
     if (b.has_children) {
       const children = await getAllBlocksWithMeta(b.id, depth + 1);
       blocks.push(...children);
@@ -87,15 +92,23 @@ async function getAllBlocksWithMeta(pageId, depth = 0) {
   return blocks;
 }
 
-// 既存タスクの出典一覧を取得（重複登録防止）
-async function fetchExistingSources() {
+// 既存タスクの「出典＋タスク名」一覧を取得（重複登録防止）
+async function fetchExistingTaskKeys() {
   const pages = await queryDatabase(TASK_DB_ID);
-  const sources = new Set();
+  const keys = new Set();
   for (const p of pages) {
     const src = (p.properties['出典']?.rich_text || []).map(t => t.plain_text).join('').trim();
-    if (src) sources.add(src);
+    const titleProp = Object.values(p.properties || {}).find(prop => prop.type === 'title');
+    const name = titleProp
+      ? (titleProp.title || []).map(t => t.plain_text).join('').trim()
+      : '';
+    if (src && name) keys.add(taskKey(src, name));
   }
-  return sources;
+  return keys;
+}
+
+function taskKey(source, name) {
+  return `${source}||${name.replace(/\s/g, '')}`;
 }
 
 async function createTask(task) {
@@ -160,7 +173,7 @@ function extractKusumotoTasks(blocks, sourceName) {
   let inActionSection = false;
 
   for (const block of blocks) {
-    const { text, type, checked } = block;
+    const { text, type, checked, mentionedUserIds } = block;
 
     if (['heading_1', 'heading_2', 'heading_3'].includes(type)) {
       inActionSection = ACTION_SECTION_PATTERNS.some(p => p.test(text));
@@ -169,7 +182,8 @@ function extractKusumotoTasks(blocks, sourceName) {
 
     if (type === 'to_do' && checked === true) continue;
 
-    const isKusumoto = KUSUMOTO_PATTERNS.some(p => p.test(text));
+    const isMentioned = mentionedUserIds?.includes(KUSUMOTO_USER_ID);
+    const isKusumoto = isMentioned || KUSUMOTO_PATTERNS.some(p => p.test(text));
     const isUncheckedTodo = type === 'to_do' && checked === false;
     const inActionBullet = inActionSection &&
       (isUncheckedTodo || ['bulleted_list_item', 'numbered_list_item'].includes(type));
@@ -243,29 +257,45 @@ async function sendSlack(scannedPages, results) {
 // メイン処理
 // ========================================
 
-async function main() {
-  // 過去25時間以内に作成されたページを対象（1時間のバッファ込み）
-  const since = new Date(Date.now() - 25 * 60 * 60 * 1000).toISOString();
-  console.log(`スキャン対象: ${since} 以降に作成された議事録`);
+function extractPageIdFromUrl(url) {
+  // Notion URLの末尾の32文字のID部分を抽出してハイフン区切りに整形
+  const match = url.match(/([0-9a-f]{32})(?:[?#]|$)/i);
+  if (!match) throw new Error(`URLからページIDを抽出できませんでした: ${url}`);
+  const id = match[1];
+  return `${id.slice(0,8)}-${id.slice(8,12)}-${id.slice(12,16)}-${id.slice(16,20)}-${id.slice(20)}`;
+}
 
-  const [newPages, existingSources] = await Promise.all([
-    queryDatabase(MINUTES_DB_ID, {
+async function main() {
+  const manualMode = !!PAGE_URL;
+
+  let targetPages;
+  if (manualMode) {
+    const pageId = extractPageIdFromUrl(PAGE_URL);
+    console.log(`手動モード: 指定ページのみスキャン (${pageId})`);
+    const page = await notionRequest('GET', `/v1/pages/${pageId}`);
+    targetPages = [page];
+  } else {
+    // 過去25時間以内に作成されたページを対象（1時間のバッファ込み）
+    const since = new Date(Date.now() - 25 * 60 * 60 * 1000).toISOString();
+    console.log(`スキャン対象: ${since} 以降に作成された議事録`);
+    targetPages = await queryDatabase(MINUTES_DB_ID, {
       timestamp: 'created_time',
       created_time: { on_or_after: since },
-    }),
-    fetchExistingSources(),
-  ]);
+    });
+  }
 
-  console.log(`新着議事録: ${newPages.length} 件`);
+  const existingTaskKeys = await fetchExistingTaskKeys();
 
-  if (newPages.length === 0) {
+  console.log(`対象議事録: ${targetPages.length} 件`);
+
+  if (targetPages.length === 0) {
     await sendSlack(0, []);
     return;
   }
 
   const results = [];
 
-  for (const page of newPages) {
+  for (const page of targetPages) {
     const titleProp = Object.values(page.properties || {}).find(p => p.type === 'title');
     const title = titleProp
       ? (titleProp.title || []).map(t => t.plain_text).join('').trim()
@@ -273,32 +303,33 @@ async function main() {
 
     console.log(`\n処理中: 「${title}」`);
 
-    // 同じ出典のタスクが既にあればスキップ（重複登録防止）
-    if (existingSources.has(title)) {
-      console.log(`  → スキップ（処理済み）`);
-      results.push({ title, addedCount: 0, skipped: true });
-      continue;
-    }
-
     try {
       const blocks = await getAllBlocksWithMeta(page.id);
       const tasks = extractKusumotoTasks(blocks, title);
       console.log(`  → ${tasks.length} 件のタスクを検出`);
 
+      let addedCount = 0;
       for (const task of tasks) {
+        // タスク単位で重複チェック
+        if (existingTaskKeys.has(taskKey(task.source, task.name))) {
+          console.log(`    - スキップ（既に登録済み）: ${task.name}`);
+          continue;
+        }
         await createTask(task);
+        existingTaskKeys.add(taskKey(task.source, task.name));
+        addedCount++;
         console.log(`    ✓ 追加: ${task.name}`);
         await new Promise(r => setTimeout(r, 350)); // レート制限対策
       }
 
-      results.push({ title, addedCount: tasks.length, skipped: false });
+      results.push({ title, addedCount, skipped: false });
     } catch (e) {
       console.error(`  ✗ エラー: ${e.message}`);
       results.push({ title, addedCount: 0, skipped: false, error: true });
     }
   }
 
-  await sendSlack(newPages.length, results);
+  await sendSlack(targetPages.length, results);
   console.log('\n完了');
 }
 
