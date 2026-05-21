@@ -7,22 +7,22 @@
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@300;400;500;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
   :root {
-    --bg: #f0f2f5;
+    --bg: #f3f4f6;
     --surface: #ffffff;
-    --surface2: #f7f8fa;
-    --surface3: #eceef2;
-    --border: #dde0e8;
-    --text: #1c1e26;
-    --text2: #5c6070;
-    --text3: #9aa0ae;
-    --accent: #4f63d2;
-    --accent2: #0fa37f;
-    --danger: #d94040;
-    --warn: #c97315;
-    --success: #1e8c4a;
-    --blue: #2563a8;
-    --shadow: 0 1px 4px rgba(0,0,0,0.07), 0 2px 12px rgba(0,0,0,0.05);
-    --shadow-md: 0 4px 16px rgba(0,0,0,0.10), 0 1px 4px rgba(0,0,0,0.06);
+    --surface2: #f9fafb;
+    --surface3: #f3f4f6;
+    --border: #d1d5db;
+    --text: #111827;
+    --text2: #4b5563;
+    --text3: #9ca3af;
+    --accent: #3b5bdb;
+    --accent2: #0d9488;
+    --danger: #dc2626;
+    --warn: #d97706;
+    --success: #16a34a;
+    --blue: #1d4ed8;
+    --shadow: 0 1px 2px rgba(0,0,0,0.06);
+    --shadow-md: 0 2px 6px rgba(0,0,0,0.08);
   }
 
   /* パスワードゲート */
@@ -41,7 +41,7 @@
   #pw-box {
     background: var(--surface);
     border: 1px solid var(--border);
-    border-radius: 16px;
+    border-radius: 2px;
     padding: 36px 32px;
     box-shadow: var(--shadow-md);
     width: 100%;
@@ -53,8 +53,8 @@
   #pw-input {
     width: 100%;
     padding: 10px 14px;
-    border: 1.5px solid var(--border);
-    border-radius: 8px;
+    border: 1px solid var(--border);
+    border-radius: 2px;
     font-size: 15px;
     font-family: inherit;
     outline: none;
@@ -90,7 +90,6 @@
     z-index: 100;
     gap: 12px;
     flex-wrap: wrap;
-    box-shadow: var(--shadow);
   }
 
   .header-left {
@@ -103,7 +102,7 @@
     width: 34px;
     height: 34px;
     background: var(--accent);
-    border-radius: 9px;
+    border-radius: 0px;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -136,7 +135,7 @@
     display: none;
     background: var(--surface3);
     border: 1px solid var(--border);
-    border-radius: 8px;
+    border-radius: 2px;
     color: var(--text2);
     padding: 6px 10px;
     cursor: pointer;
@@ -146,7 +145,7 @@
   /* ボタン */
   .btn {
     padding: 7px 14px;
-    border-radius: 8px;
+    border-radius: 2px;
     border: none;
     cursor: pointer;
     font-size: 13px;
@@ -162,9 +161,8 @@
   .btn-primary {
     background: var(--accent);
     color: #fff;
-    box-shadow: 0 1px 3px rgba(79,99,210,0.25);
   }
-  .btn-primary:hover { background: #3d50c4; box-shadow: 0 2px 6px rgba(79,99,210,0.3); }
+  .btn-primary:hover { background: #3451c7; }
 
   .btn-secondary {
     background: var(--surface);
@@ -226,7 +224,7 @@
     width: 100%;
     text-align: left;
     padding: 7px 10px;
-    border-radius: 7px;
+    border-radius: 0px;
     border: none;
     background: transparent;
     color: var(--text2);
@@ -242,9 +240,11 @@
 
   .filter-btn:hover { background: var(--surface3); color: var(--text); }
   .filter-btn.active {
-    background: #eff1fb;
+    background: #eef0fb;
     color: var(--accent);
     font-weight: 500;
+    border-left: 2px solid var(--accent);
+    padding-left: 8px;
   }
 
   .filter-count {
@@ -253,7 +253,7 @@
     background: var(--surface3);
     color: var(--text3);
     padding: 1px 7px;
-    border-radius: 10px;
+    border-radius: 2px;
   }
 
   /* 統計カード */
@@ -267,7 +267,7 @@
   .stat-card {
     background: var(--surface3);
     border: 1px solid var(--border);
-    border-radius: 10px;
+    border-radius: 0px;
     padding: 12px 8px;
     text-align: center;
   }
@@ -318,7 +318,7 @@
   .sort-select {
     background: var(--surface);
     border: 1px solid var(--border);
-    border-radius: 8px;
+    border-radius: 2px;
     color: var(--text2);
     padding: 6px 10px;
     font-size: 12px;
@@ -332,21 +332,18 @@
   .task-card {
     background: var(--surface);
     border: 1px solid var(--border);
-    border-radius: 10px;
-    margin-bottom: 8px;
+    border-radius: 0px;
+    margin-bottom: 6px;
     overflow: hidden;
-    transition: border-color 0.15s, box-shadow 0.15s;
-    box-shadow: var(--shadow);
+    transition: border-color 0.15s;
   }
 
   .task-card:hover {
-    border-color: #a5b0e8;
-    box-shadow: 0 2px 10px rgba(79,99,210,0.10);
+    border-color: #93a3f8;
   }
 
-  .task-card.expanded {
-    border-color: var(--accent);
-    box-shadow: 0 2px 12px rgba(79,99,210,0.13);
+  .task-card.selected {
+    border-left: 2px solid var(--accent);
   }
 
   .task-card-header {
@@ -399,7 +396,7 @@
   .badge {
     font-size: 11px;
     padding: 2px 8px;
-    border-radius: 5px;
+    border-radius: 2px;
     font-weight: 500;
     white-space: nowrap;
   }
@@ -433,7 +430,7 @@
   .task-expand-btn {
     width: 24px;
     height: 24px;
-    border-radius: 6px;
+    border-radius: 2px;
     background: transparent;
     border: none;
     cursor: pointer;
@@ -447,18 +444,6 @@
   }
 
   .task-expand-btn:hover { background: var(--surface3); color: var(--text); }
-
-  /* タスク詳細 */
-  .task-detail {
-    padding: 0 16px 16px 36px;
-    display: none;
-    border-top: 1px solid var(--border);
-    padding-top: 14px;
-    margin-top: 0;
-    background: var(--surface2);
-  }
-
-  .task-detail.open { display: block; }
 
   .detail-row {
     display: grid;
@@ -484,7 +469,7 @@
   .status-select {
     background: var(--surface);
     border: 1px solid var(--border);
-    border-radius: 7px;
+    border-radius: 2px;
     color: var(--text);
     padding: 6px 10px;
     font-size: 13px;
@@ -501,7 +486,7 @@
     width: 100%;
     background: var(--surface);
     border: 1px solid var(--border);
-    border-radius: 7px;
+    border-radius: 2px;
     color: var(--text);
     padding: 8px 12px;
     font-size: 13px;
@@ -529,7 +514,7 @@
     color: var(--accent2);
     border: 1px solid #b0ddd0;
     padding: 5px 12px;
-    border-radius: 7px;
+    border-radius: 2px;
     font-size: 12px;
     cursor: pointer;
     font-family: 'Noto Sans JP', sans-serif;
@@ -558,7 +543,7 @@
   .toast {
     background: var(--surface);
     border: 1px solid var(--border);
-    border-radius: 10px;
+    border-radius: 2px;
     padding: 11px 16px;
     font-size: 13px;
     min-width: 240px;
@@ -596,7 +581,7 @@
   .modal {
     background: var(--surface);
     border: 1px solid var(--border);
-    border-radius: 14px;
+    border-radius: 4px;
     padding: 24px;
     width: 100%;
     max-width: 520px;
@@ -630,7 +615,7 @@
     width: 100%;
     background: var(--surface2);
     border: 1px solid var(--border);
-    border-radius: 7px;
+    border-radius: 2px;
     color: var(--text);
     padding: 8px 12px;
     font-size: 13px;
@@ -644,7 +629,7 @@
     width: 100%;
     background: var(--surface2);
     border: 1px solid var(--border);
-    border-radius: 7px;
+    border-radius: 2px;
     color: var(--text);
     padding: 8px 12px;
     font-size: 13px;
@@ -657,7 +642,7 @@
     width: 100%;
     background: var(--surface2);
     border: 1px solid var(--border);
-    border-radius: 7px;
+    border-radius: 2px;
     color: var(--text);
     padding: 8px 12px;
     font-size: 13px;
@@ -688,7 +673,7 @@
   .minutes-item {
     background: var(--surface);
     border: 1px solid var(--border);
-    border-radius: 8px;
+    border-radius: 0px;
     padding: 9px 12px;
     display: flex;
     align-items: center;
@@ -710,18 +695,18 @@
   /* タブ */
   .tabs {
     display: flex;
-    gap: 2px;
-    background: var(--surface3);
-    padding: 3px;
-    border-radius: 9px;
+    gap: 0;
+    background: transparent;
+    padding: 0;
+    border-radius: 0;
     margin-bottom: 18px;
-    border: 1px solid var(--border);
+    border-bottom: 1px solid var(--border);
   }
 
   .tab {
-    flex: 1;
-    padding: 7px 12px;
-    border-radius: 7px;
+    flex: 0 0 auto;
+    padding: 8px 16px;
+    border-radius: 0;
     border: none;
     background: transparent;
     color: var(--text2);
@@ -731,13 +716,15 @@
     font-weight: 500;
     transition: all 0.15s;
     text-align: center;
+    border-bottom: 2px solid transparent;
+    margin-bottom: -1px;
   }
 
   .tab.active {
-    background: var(--surface);
+    background: transparent;
     color: var(--accent);
-    box-shadow: 0 1px 3px rgba(0,0,0,0.08);
     font-weight: 600;
+    border-bottom: 2px solid var(--accent);
   }
 
   .tab-content { display: none; }
@@ -747,7 +734,7 @@
   .alert-banner {
     background: #fef4f4;
     border: 1px solid #f0c8c8;
-    border-radius: 9px;
+    border-radius: 0px;
     padding: 11px 14px;
     margin-bottom: 14px;
     display: flex;
@@ -762,12 +749,12 @@
   /* スクロールバー */
   ::-webkit-scrollbar { width: 6px; }
   ::-webkit-scrollbar-track { background: transparent; }
-  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 0px; }
 
   .notion-token-input {
     background: var(--surface2);
     border: 1px solid var(--border);
-    border-radius: 7px;
+    border-radius: 2px;
     color: var(--text);
     padding: 6px 10px;
     font-size: 12px;
@@ -855,8 +842,6 @@
 
     .task-card-header { padding: 12px; }
 
-    .task-detail { padding: 0 12px 14px 28px; padding-top: 12px; }
-
     .content-header {
       flex-direction: column;
       align-items: flex-start;
@@ -873,12 +858,134 @@
     .alert-banner-text div:last-child {
       display: none;
     }
+
+    /* モバイルではパネルを全幅で表示 */
+    .detail-panel {
+      width: 100% !important;
+      right: 0 !important;
+    }
   }
 
   @media (max-width: 480px) {
     .stats { grid-template-columns: repeat(4, 1fr); }
     .stat-num { font-size: 18px; }
     .stat-label { font-size: 10px; }
+  }
+
+  /* 右側ドロワーパネル */
+  .detail-panel {
+    position: fixed;
+    top: 61px;
+    right: 0;
+    width: 380px;
+    bottom: 0;
+    background: var(--surface);
+    border-left: 1px solid var(--border);
+    z-index: 120;
+    display: flex;
+    flex-direction: column;
+    transform: translateX(100%);
+    transition: transform 0.2s ease;
+    overflow: hidden;
+  }
+
+  .detail-panel.open {
+    transform: translateX(0);
+  }
+
+  .detail-panel-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 14px 16px;
+    border-bottom: 1px solid var(--border);
+    background: var(--surface);
+    flex-shrink: 0;
+    gap: 8px;
+  }
+
+  .detail-panel-title {
+    font-size: 13.5px;
+    font-weight: 600;
+    color: var(--text);
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .detail-panel-close {
+    width: 28px;
+    height: 28px;
+    border: 1px solid var(--border);
+    border-radius: 2px;
+    background: var(--surface2);
+    color: var(--text2);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 14px;
+    flex-shrink: 0;
+    transition: all 0.12s;
+  }
+
+  .detail-panel-close:hover {
+    background: var(--surface3);
+    color: var(--text);
+  }
+
+  .detail-panel-body {
+    flex: 1;
+    overflow-y: auto;
+    padding: 16px;
+  }
+
+  .detail-panel-section {
+    margin-bottom: 16px;
+  }
+
+  .detail-panel-label {
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    color: var(--text3);
+    text-transform: uppercase;
+    margin-bottom: 6px;
+  }
+
+  .detail-panel-value {
+    font-size: 13px;
+    color: var(--text);
+  }
+
+  .detail-panel-meta-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+    margin-bottom: 16px;
+  }
+
+  .detail-panel-actions {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+    padding-top: 12px;
+    border-top: 1px solid var(--border);
+  }
+
+  /* パネルオーバーレイ（クリックで閉じる用） */
+  .detail-panel-backdrop {
+    display: none;
+    position: fixed;
+    inset: 0;
+    z-index: 119;
+    background: transparent;
+  }
+
+  .detail-panel-backdrop.open {
+    display: block;
   }
 </style>
 </head>
@@ -1222,6 +1329,19 @@
   </div>
 </div>
 
+<!-- 右側詳細パネルバックドロップ -->
+<div class="detail-panel-backdrop" id="detail-panel-backdrop" onclick="closeDetailPanel()"></div>
+
+<!-- 右側詳細パネル -->
+<div class="detail-panel" id="detail-panel">
+  <div class="detail-panel-header">
+    <div class="detail-panel-title" id="panel-title"></div>
+    <button class="detail-panel-close" onclick="closeDetailPanel()" title="閉じる">✕</button>
+  </div>
+  <div class="detail-panel-body" id="panel-body">
+  </div>
+</div>
+
 <!-- トースト -->
 <div class="toast-container" id="toast-container"></div>
 
@@ -1251,6 +1371,7 @@ function notionFetch(path, options = {}) {
 }
 
 let currentFilter = 'all';
+let currentDetailTaskId = null;
 
 const initialTasks = [
   // アラート
@@ -1441,9 +1562,10 @@ function renderTasks() {
 
   list.innerHTML = filtered.map(task => {
     const minutesUrl = findMinutesUrl(task.source);
+    const isSelected = task.id === currentDetailTaskId;
     return `
-    <div class="task-card ${task._expanded ? 'expanded' : ''}" id="card-${task.id}">
-      <div class="task-card-header" onclick="toggleExpand('${task.id}')">
+    <div class="task-card${isSelected ? ' selected' : ''}" id="card-${task.id}">
+      <div class="task-card-header" onclick="openDetailPanel('${task.id}')">
         <div class="task-priority-dot task-priority-${task.status === 'アラート' ? 'alert' : task.priority === '高' ? 'high' : task.priority === '中' ? 'mid' : 'low'}"></div>
         <div class="task-main">
           <div class="task-name">${escHtml(task.name)}</div>
@@ -1456,48 +1578,7 @@ function renderTasks() {
             ${task.notionId ? '<span class="badge" style="background: #edf7f4; color: var(--accent2); border: 1px solid #b0ddd0;">Notion✓</span>' : ''}
           </div>
         </div>
-        <button class="task-expand-btn">${task._expanded ? '▲' : '▼'}</button>
-      </div>
-      <div class="task-detail ${task._expanded ? 'open' : ''}" id="detail-${task.id}">
-        <div class="detail-row">
-          <div class="detail-label">ステータス</div>
-          <div>
-            <select class="status-select" onchange="updateStatus('${task.id}', this.value)">
-              <option ${task.status === '未着手' ? 'selected' : ''}>未着手</option>
-              <option ${task.status === '進行中' ? 'selected' : ''}>進行中</option>
-              <option ${task.status === 'アラート' ? 'selected' : ''}>アラート</option>
-              <option ${task.status === '保留' ? 'selected' : ''}>保留</option>
-              <option ${task.status === '完了' ? 'selected' : ''}>完了</option>
-            </select>
-          </div>
-        </div>
-        <div class="detail-row">
-          <div class="detail-label">出典議事録</div>
-          <div class="detail-value">
-            ${minutesUrl
-              ? `<a href="${escHtml(minutesUrl)}" target="_blank" rel="noopener noreferrer" style="color: var(--accent); text-decoration: none; font-size: 13px; display: inline-flex; align-items: center; gap: 4px;">${escHtml(task.source)} <span style="font-size:11px;">↗</span></a>`
-              : `<span style="color: var(--text3); font-size: 13px;">${escHtml(task.source)}</span>`}
-          </div>
-        </div>
-        <div class="detail-row">
-          <div class="detail-label">備考・メモ</div>
-          <div>
-            <textarea class="memo-input" id="memo-${task.id}" placeholder="進捗メモを入力...">${escHtml(task.note || '')}</textarea>
-          </div>
-        </div>
-        ${task.deadline ? `<div class="detail-row"><div class="detail-label">期日</div><div class="detail-value">${task.deadline}</div></div>` : ''}
-        <div class="detail-row">
-          <div class="detail-label">領域</div>
-          <div class="detail-value">${escHtml(task.domain)}</div>
-        </div>
-        <div class="detail-actions">
-          <button class="btn btn-secondary btn-sm" onclick="openEditTaskModal('${task.id}'); event.stopPropagation();">✏️ 編集</button>
-          <button class="btn btn-danger btn-sm" onclick="deleteTask('${task.id}'); event.stopPropagation();">🗑 削除</button>
-          <button class="btn btn-secondary btn-sm" onclick="saveMemo('${task.id}')">💾 メモ保存</button>
-          <button class="notion-sync-btn btn-sm ${task.notionId ? 'synced' : ''}" id="sync-btn-${task.id}" onclick="syncTaskToNotion('${task.id}')">
-            ${task.notionId ? '✅ Notion同期済み' : '🔄 Notionに登録'}
-          </button>
-        </div>
+        <button class="task-expand-btn" onclick="openDetailPanel('${task.id}'); event.stopPropagation();">›</button>
       </div>
     </div>
   `;
@@ -1532,11 +1613,89 @@ function isOverdue(deadline) {
   return deadline < todayStr;
 }
 
-function toggleExpand(id) {
+function openDetailPanel(id) {
   const task = tasks.find(t => t.id === id);
-  if (task) {
-    task._expanded = !task._expanded;
-    renderTasks();
+  if (!task) return;
+  currentDetailTaskId = id;
+  populateDetailPanel(task);
+  document.getElementById('detail-panel').classList.add('open');
+  document.getElementById('detail-panel-backdrop').classList.add('open');
+  // 選択状態を反映
+  document.querySelectorAll('.task-card').forEach(c => c.classList.remove('selected'));
+  const card = document.getElementById('card-' + id);
+  if (card) card.classList.add('selected');
+}
+
+function populateDetailPanel(task) {
+  const minutesUrl = findMinutesUrl(task.source);
+  document.getElementById('panel-title').textContent = task.name;
+  document.getElementById('panel-body').innerHTML = `
+    <div class="detail-panel-section">
+      <div class="detail-panel-label">ステータス</div>
+      <select class="status-select" style="width:100%;" onchange="updateStatus('${task.id}', this.value)">
+        <option ${task.status === '未着手' ? 'selected' : ''}>未着手</option>
+        <option ${task.status === '進行中' ? 'selected' : ''}>進行中</option>
+        <option ${task.status === 'アラート' ? 'selected' : ''}>アラート</option>
+        <option ${task.status === '保留' ? 'selected' : ''}>保留</option>
+        <option ${task.status === '完了' ? 'selected' : ''}>完了</option>
+      </select>
+    </div>
+    <div class="detail-panel-meta-grid">
+      ${task.deadline ? `
+      <div>
+        <div class="detail-panel-label">期日</div>
+        <div class="detail-panel-value">${escHtml(task.deadline)}${isOverdue(task.deadline) ? ' ⚠️' : ''}</div>
+      </div>` : '<div></div>'}
+      <div>
+        <div class="detail-panel-label">優先度</div>
+        <div class="detail-panel-value">${escHtml(task.priority)}</div>
+      </div>
+      <div>
+        <div class="detail-panel-label">領域</div>
+        <div class="detail-panel-value">${escHtml(task.domain)}</div>
+      </div>
+      <div>
+        <div class="detail-panel-label">出典</div>
+        <div class="detail-panel-value" style="overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">
+          ${minutesUrl
+            ? `<a href="${escHtml(minutesUrl)}" target="_blank" rel="noopener noreferrer" style="color:var(--accent);text-decoration:none;">${escHtml(task.source)} ↗</a>`
+            : escHtml(task.source || '-')}
+        </div>
+      </div>
+    </div>
+    <div class="detail-panel-section">
+      <div class="detail-panel-label">備考 / メモ</div>
+      <textarea class="memo-input" id="panel-memo" style="width:100%; min-height:90px;" placeholder="進捗メモを入力...">${escHtml(task.note || '')}</textarea>
+    </div>
+    <div class="detail-panel-actions">
+      <button class="btn btn-secondary btn-sm" onclick="savePanelMemo('${task.id}')">💾 メモ保存</button>
+      <button class="btn btn-secondary btn-sm" onclick="openEditTaskModal('${task.id}')">✏️ 編集</button>
+      <button class="btn btn-danger btn-sm" onclick="deleteTask('${task.id}')">🗑 削除</button>
+      <button class="notion-sync-btn btn-sm ${task.notionId ? 'synced' : ''}" id="panel-sync-btn-${task.id}" onclick="syncTaskToNotion('${task.id}')">
+        ${task.notionId ? '✅ Notion同期済み' : '🔄 Notionに登録'}
+      </button>
+    </div>
+  `;
+}
+
+function closeDetailPanel() {
+  currentDetailTaskId = null;
+  document.getElementById('detail-panel').classList.remove('open');
+  document.getElementById('detail-panel-backdrop').classList.remove('open');
+  document.querySelectorAll('.task-card').forEach(c => c.classList.remove('selected'));
+}
+
+function savePanelMemo(id) {
+  const task = tasks.find(t => t.id === id);
+  const memoEl = document.getElementById('panel-memo');
+  if (task && memoEl) {
+    task.note = memoEl.value;
+    if (task.notionId && !getToken()) task.localDirty = true;
+    saveData();
+    toast('メモを保存しました', 'success');
+    if (getToken() && task.notionId) {
+      syncTaskToNotion(id, true);
+    }
   }
 }
 
@@ -1554,6 +1713,10 @@ function updateStatus(id, status) {
     saveData();
     renderTasks();
     toast(`ステータスを「${status}」に更新しました`, 'success');
+    // パネルが開いていれば再描画
+    if (currentDetailTaskId === id) {
+      populateDetailPanel(task);
+    }
     // Notionトークンがあり、すでにNotion登録済みなら自動同期
     if (getToken() && task.notionId) {
       syncTaskToNotion(id, true);
@@ -1562,10 +1725,11 @@ function updateStatus(id, status) {
 }
 
 function saveMemo(id) {
+  // パネルが開いている場合はパネルのtextareaを参照
+  const memoEl = document.getElementById('panel-memo');
   const task = tasks.find(t => t.id === id);
-  const memo = document.getElementById(`memo-${id}`).value;
-  if (task) {
-    task.note = memo;
+  if (task && memoEl && currentDetailTaskId === id) {
+    task.note = memoEl.value;
     if (task.notionId && !getToken()) task.localDirty = true;
     saveData();
     toast('メモを保存しました', 'success');
@@ -2136,6 +2300,10 @@ function saveEditTask() {
   closeModal('edit-task-modal');
   renderTasks();
   toast('タスクを更新しました', 'success');
+  // パネルが開いていれば再描画
+  if (currentDetailTaskId === id) {
+    populateDetailPanel(task);
+  }
 
   if (getToken() && task.notionId) {
     syncTaskToNotion(id, true);
@@ -2149,6 +2317,9 @@ function deleteTask(id) {
   if (!confirm('このタスクを削除してよろしいですか？')) return;
   tasks = tasks.filter(t => t.id !== id);
   saveData();
+  if (currentDetailTaskId === id) {
+    closeDetailPanel();
+  }
   renderTasks();
   toast('タスクを削除しました', 'success');
 }
@@ -2287,7 +2458,7 @@ async function syncTaskToNotion(id, silent = false) {
   const task = tasks.find(t => t.id === id);
   if (!task) return false;
 
-  const btn = document.getElementById(`sync-btn-${id}`);
+  const btn = document.getElementById(`panel-sync-btn-${id}`);
   if (btn && !silent) {
     btn.classList.add('syncing');
     btn.textContent = '同期中...';
@@ -2342,6 +2513,10 @@ async function syncTaskToNotion(id, silent = false) {
       if (!silent) toast(`「${task.name.substring(0, 20)}…」をNotionに登録しました`, 'success');
       else toast(`Notionに自動同期しました`, 'success');
       renderTasks();
+      // パネルが開いていれば再描画
+      if (currentDetailTaskId === id) {
+        populateDetailPanel(task);
+      }
       return true;
     } else {
       throw new Error(JSON.stringify(data));
