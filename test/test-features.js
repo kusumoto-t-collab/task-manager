@@ -333,6 +333,104 @@ function assertEq(a, b, msg) { if (a !== b) throw new Error(`${msg || ''} 期待
     assert(!tasks[0].name.startsWith('決定事項'), 'プレフィックスが残ってる: ' + tasks[0].name);
   });
 
+  // ============ 11. parseClaudeOutput（Claude出力貼り付け） ============
+  console.log('\n【11. Claude出力 一括パース】');
+  test('parseClaudeOutput関数が定義されている', () => {
+    assertEq(typeof window.parseClaudeOutput, 'function');
+  });
+  test('「Claude出力を貼り付け」タブのUI要素が存在', () => {
+    assert(document.getElementById('qtab-paste'), 'qtab-paste なし');
+    assert(document.getElementById('qtab-paste-btn'), 'qtab-paste-btn なし');
+    assert(document.getElementById('paste-input'), 'paste-input なし');
+    assert(document.getElementById('paste-stats'), 'paste-stats なし');
+  });
+  test('チェックボックス付きタスクから抽出', () => {
+    const text = '- [ ] 5/26 ユニーク融資面談に参加\n- [ ] 岡田弁護士に社外取締役の相談 高\n- [x] 完了済みタスク';
+    const { tasks, stats } = window.parseClaudeOutput(text);
+    assert(tasks.length === 2, `期待:2件 実際:${tasks.length}件`);
+    assert(stats.completedSkipped >= 1, '完了済みがスキップされてない');
+  });
+  test('番号リストからも抽出', () => {
+    const text = '1. 内定通知書の作成 5/25 緊急 総務\n2. Shopify実装 鎌形と\n3) 反社チェック';
+    const { tasks } = window.parseClaudeOutput(text);
+    assert(tasks.length === 3, `期待:3件 実際:${tasks.length}件`);
+  });
+  test('見出し（## や 【】）はスキップされる', () => {
+    const text = '## アクションアイテム\n- [ ] 実タスク\n【次回までに】\n- もう一つのタスク';
+    const { tasks, stats } = window.parseClaudeOutput(text);
+    assertEq(tasks.length, 2, '見出しスキップ後のタスク数');
+    assert(stats.headers >= 2, `見出しスキップ数:${stats.headers}`);
+  });
+  test('Markdownの太字記号が除去される', () => {
+    const text = '- **5/26**: ユニーク融資面談';
+    const { tasks } = window.parseClaudeOutput(text);
+    assert(tasks.length === 1, '抽出されてない');
+    assert(!tasks[0].name.includes('**'), '太字記号が残ってる: ' + tasks[0].name);
+  });
+  test('「楠元：」「楠本：」プレフィックスが除去される', () => {
+    const text = '- [ ] 楠元：ユニーク融資面談\n- [ ] 楠本：社外取締役相談';
+    const { tasks } = window.parseClaudeOutput(text);
+    assertEq(tasks.length, 2);
+    assert(!tasks[0].name.startsWith('楠元'), '楠元残ってる: ' + tasks[0].name);
+    assert(!tasks[1].name.startsWith('楠本'), '楠本残ってる: ' + tasks[1].name);
+  });
+  test('期日・優先度・ステータスが各行から抽出される', () => {
+    // 全角スペースで状況を区切ったClaude出力スタイル
+    const text = '- 5月末までに 反社チェック実施　進行中で橋本さん待ち';
+    const { tasks } = window.parseClaudeOutput(text);
+    assertEq(tasks.length, 1);
+    assertEq(tasks[0].deadline, '2026-05-31', '期日');
+    assertEq(tasks[0].status, '進行中', 'ステータス');
+    assert(tasks[0].note && tasks[0].note.length > 0, 'メモが空: name=' + tasks[0].name + ' note=' + tasks[0].note);
+  });
+  test('重複タスクは1件にまとめられる', () => {
+    const text = '- タスクA\n- タスクA\n- タスクB';
+    const { tasks } = window.parseClaudeOutput(text);
+    assertEq(tasks.length, 2);
+  });
+  test('区切り線（---, ===）はスキップ', () => {
+    const text = '- タスクA\n---\n- タスクB\n===\n- タスクC';
+    const { tasks } = window.parseClaudeOutput(text);
+    assertEq(tasks.length, 3);
+  });
+  test('updatePastePreviewでDOMに反映される', () => {
+    document.getElementById('paste-input').value = '- [ ] テストタスク1\n- [ ] テストタスク2';
+    window.updatePastePreview();
+    const preview = document.getElementById('quick-preview');
+    assertEq(preview.style.display, 'block', 'プレビュー非表示');
+    const stats = document.getElementById('paste-stats').textContent;
+    assert(stats.includes('2件'), '統計テキストがない: ' + stats);
+  });
+  test('switchQuickTab(paste)でpasteタブがactive', () => {
+    window.switchQuickTab('paste');
+    const btn = document.getElementById('qtab-paste-btn');
+    assert(btn.classList.contains('active'), 'paste-btn未アクティブ');
+    assertEq(document.getElementById('qtab-paste').style.display, 'block');
+    assertEq(document.getElementById('qtab-text').style.display, 'none');
+    assertEq(document.getElementById('qtab-notion').style.display, 'none');
+  });
+  test('長文の議事録要約からタスク抽出（総合テスト）', () => {
+    const text = `## アクションアイテム
+- [ ] 楠元：5/26 ユニーク融資面談に参加 高
+- [ ] 楠元：岡田弁護士に社外取締役就任の相談
+- [ ] 5月末までに 反社チェック実施 進行中で日経テレコン契約待ち
+- [x] 既に完了したタスク
+
+### 期限近め
+1. 内定通知書の作成 5/25 緊急 総務
+2. Shopify実装の進捗確認 鎌形と一緒に
+
+---
+背景：先週からの持ち越し`;
+    const { tasks, stats } = window.parseClaudeOutput(text);
+    assert(tasks.length === 5, `期待:5件 実際:${tasks.length}件 (${tasks.map(t => t.name).join(' / ')})`);
+    assert(stats.completedSkipped >= 1, '完了スキップなし');
+    assert(stats.headers >= 2, '見出しスキップ少ない');
+    // 期日・優先度が反映されているか
+    const facilitation = tasks.find(t => t.name.includes('融資面談'));
+    if (facilitation) assertEq(facilitation.priority, '高', '融資面談の優先度');
+  });
+
   // ============ サマリー ============
   console.log('\n' + results.join('\n'));
   console.log(`\n=== 結果: ${passed} passed, ${failed} failed ===`);

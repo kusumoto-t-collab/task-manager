@@ -1535,8 +1535,9 @@
 
     <!-- タブ切替 -->
     <div class="tabs" style="margin-bottom: 16px;">
-      <button class="tab active" id="qtab-text-btn" onclick="switchQuickTab('text')">✏️ テキスト入力</button>
-      <button class="tab" id="qtab-notion-btn" onclick="switchQuickTab('notion')">📄 議事録URLから抽出</button>
+      <button class="tab active" id="qtab-text-btn"  onclick="switchQuickTab('text')">✏️ テキスト入力</button>
+      <button class="tab" id="qtab-paste-btn" onclick="switchQuickTab('paste')">🤖 Claude出力を貼り付け</button>
+      <button class="tab" id="qtab-notion-btn" onclick="switchQuickTab('notion')">📄 議事録URL</button>
     </div>
 
     <!-- テキスト入力タブ -->
@@ -1554,6 +1555,30 @@
         </div>
       </details>
       <textarea class="form-textarea" id="quick-input" style="min-height: 130px; font-size: 14px;" placeholder="例: 明日までにメイカさんに連絡 緊急 PBGH LINE&#10;5/25 池田と素材確認 プロダクト" oninput="updateQuickPreview()"></textarea>
+    </div>
+
+    <!-- Claude出力 貼り付けタブ -->
+    <div id="qtab-paste" style="display:none;">
+      <div style="font-size: 12px; color: var(--text2); margin-bottom: 10px; line-height: 1.7;">
+        Claudeチャットなどで議事録を要約・タスク化した結果を、そのままここに貼り付けてください。<br>
+        <span style="color: var(--text3);">マークダウン（- [ ]、## 見出し、**太字** など）・箇条書き・チェックボックスは自動で除去します。期日・優先度・状況も各行から抽出します。</span>
+      </div>
+      <details style="margin-bottom:10px;">
+        <summary style="font-size:11px; color: var(--text3); cursor:pointer;">💡 貼り付け例（Claudeの出力をそのまま）</summary>
+        <div style="background: var(--surface2); border: 1px solid var(--border); border-radius: 7px; padding: 10px; margin-top: 6px; font-size: 11px; color: var(--text2); line-height: 1.7; font-family: ui-monospace, 'SF Mono', Menlo, monospace; white-space: pre-wrap;">## アクションアイテム
+- [ ] 楠元：5/26 ユニーク融資面談に参加
+- [ ] 楠元：岡田弁護士に社外取締役の相談 高
+- [ ] 5月末までに 反社チェック実施 進行中で橋本さん待ち
+
+### 期限近め
+1. 内定通知書の作成 5/25 緊急 総務
+2. Shopify実装の進捗確認 鎌形と</div>
+      </details>
+      <textarea class="form-textarea" id="paste-input"
+        style="min-height: 260px; font-size: 13px; font-family: ui-monospace, 'SF Mono', Menlo, monospace; line-height: 1.6;"
+        placeholder="ここにClaudeの出力（要約・タスクリスト）を貼り付け..."
+        oninput="updatePastePreview()"></textarea>
+      <div id="paste-stats" style="font-size: 11px; color: var(--text3); margin-top: 6px; min-height: 16px;"></div>
     </div>
 
     <!-- 議事録URL抽出タブ -->
@@ -2246,6 +2271,13 @@ function parseQuickInput(line) {
   text = text.replace(/までに?/, '');
 
   // ② 優先度
+  // 末尾の単独「高／中／低」を優先度として認識（「高さ確認」などの誤検出を避けるため末尾限定）
+  const trailingPri = text.match(/[\s　]+(高|中|低)[\s　]*$/);
+  if (trailingPri) {
+    extracted.priority = trailingPri[1];
+    text = text.slice(0, trailingPri.index).trim();
+  }
+  // キーワードベースの優先度（緊急、至急など）
   for (const [pri, kws] of Object.entries(PRIORITY_KEYWORDS)) {
     for (const kw of kws) {
       if (text.includes(kw)) {
@@ -2328,18 +2360,128 @@ function parseQuickInputAll(rawText) {
     .filter(t => t !== null);
 }
 
+// ========================================
+// Claude出力（要約／タスクリスト）の一括パース
+// マークダウン・箇条書き・チェックボックス記号を除去して各行をタスク化
+// ========================================
+function parseClaudeOutput(rawText) {
+  const lines = rawText.split('\n');
+  const tasks = [];
+  const seen = new Set();
+  const stats = { total: 0, skipped: 0, parsed: 0, headers: 0, completedSkipped: 0 };
+
+  // セクション系の接頭辞（タスクではなく文脈なので、除外もしくはメモへ）
+  // - 単独行（"背景" のみ）
+  // - "背景：〜" のような説明行
+  const skipStandalone = /^(背景|目的|議論ポイント|着地目標|議論メモ|次回までの課題|参加者|日時|凡例|前回からの差分|決定事項まとめ|ネクストアクション|タスクまとめ|アクションアイテム|議題)[:：]?\s*$/;
+  const skipContextLine = /^(背景|目的|議論ポイント|着地目標|議論メモ|参加者|日時|凡例|前提|目標|備考)[:：]/;
+
+  for (let line of lines) {
+    stats.total++;
+    const original = line;
+
+    line = line.trim();
+    if (!line) { stats.skipped++; continue; }
+
+    // 区切り線 (---, ===, ***)
+    if (/^[\-=\*]{3,}$/.test(line)) { stats.skipped++; continue; }
+
+    // 完了済みチェックボックス (- [x] / [X] / [✓])
+    if (/^[\s　]*[\-・*•▶→]?[\s　]*\[[xX✓✔]\]/.test(line)) { stats.completedSkipped++; continue; }
+
+    // 見出し（# / ## / ###）はスキップ
+    if (/^#+\s/.test(line)) { stats.headers++; continue; }
+
+    // 【見出し】 ■見出し ▼見出し
+    if (/^[【■▼◆●○][^】]*[】]?$/.test(line) && line.length < 30) { stats.headers++; continue; }
+
+    // セクション接頭辞単独行 または 「背景：〜」のような文脈説明行
+    if (skipStandalone.test(line) || skipContextLine.test(line)) { stats.headers++; continue; }
+
+    // 末尾「：」「:」で終わる短い行は見出しと判定（30文字未満）
+    if (line.length < 30 && /[：:]\s*$/.test(line) && !/\d+[\/月]\d/.test(line)) {
+      stats.headers++; continue;
+    }
+
+    // マークダウン記号・箇条書き記号を除去
+    line = line
+      .replace(/^[\s　]*[\-・*•▶→►＞>＊◆●○][\s　]+/, '')   // bullets
+      .replace(/^[\s　]*\d+[\.\)）][\s　]+/, '')              // 1. / 1) / 1）
+      .replace(/^[\s　]*[\[［][\sxX✓✔　]?[\]］][\s　]*/, '')  // [ ] / [x]
+      .replace(/^[\s　]*[☐☑✓✔][\s　]+/, '')                 // unicode checkbox
+      .replace(/\*\*([^*]+)\*\*/g, '$1')                       // **bold**
+      .replace(/__([^_]+)__/g, '$1')                           // __bold__
+      .replace(/`([^`]+)`/g, '$1')                             // `code`
+      .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')                 // [text](url)
+      .replace(/^[\s　]*[「『][\s　]*/, '')
+      .replace(/[\s　]*[」』][\s　]*$/, '')
+      .trim();
+
+    // 短すぎる行はスキップ
+    if (line.length < 4) { stats.skipped++; continue; }
+
+    // 句読点だけや記号だけの行
+    if (/^[\s　、。・……一-]+$/.test(line)) { stats.skipped++; continue; }
+
+    // 楠元接頭辞を除去（[ ] 楠元：〜 / 楠本：〜）
+    line = line
+      .replace(/^楠元[\s　]*[：:]\s*/, '')
+      .replace(/^楠本[\s　]*[：:]\s*/, '')
+      .replace(/^(向井|橋本|鎌形|尾形|松井|中島|池田|宮崎|チーム|全員)[\s　]*[：:]\s*/, '')
+      .trim();
+
+    if (line.length < 4) { stats.skipped++; continue; }
+
+    // 既存の parseQuickInput で期日・優先度・ステータス・メモを抽出
+    const parsed = parseQuickInput(line);
+    if (!parsed) { stats.skipped++; continue; }
+
+    const key = parsed.name.replace(/\s/g, '');
+    if (seen.has(key)) { stats.skipped++; continue; }
+    seen.add(key);
+
+    stats.parsed++;
+    tasks.push(parsed);
+  }
+
+  return { tasks, stats };
+}
+
 let _quickTabMode = 'text';
 let _extractedTasks = [];
 let _pendingExtractSource = '';
 
 function switchQuickTab(mode) {
   _quickTabMode = mode;
-  document.getElementById('qtab-text').style.display = mode === 'text' ? 'block' : 'none';
+  document.getElementById('qtab-text').style.display   = mode === 'text'   ? 'block' : 'none';
+  document.getElementById('qtab-paste').style.display  = mode === 'paste'  ? 'block' : 'none';
   document.getElementById('qtab-notion').style.display = mode === 'notion' ? 'block' : 'none';
-  document.getElementById('qtab-text-btn').classList.toggle('active', mode === 'text');
+  document.getElementById('qtab-text-btn').classList.toggle('active',   mode === 'text');
+  document.getElementById('qtab-paste-btn').classList.toggle('active',  mode === 'paste');
   document.getElementById('qtab-notion-btn').classList.toggle('active', mode === 'notion');
   document.getElementById('quick-preview').style.display = 'none';
   _extractedTasks = [];
+  if (mode === 'paste') updatePastePreview();
+}
+
+function updatePastePreview() {
+  const text = document.getElementById('paste-input').value;
+  const statsEl = document.getElementById('paste-stats');
+  if (!text.trim()) {
+    _extractedTasks = [];
+    renderPreview([]);
+    if (statsEl) statsEl.textContent = '';
+    return;
+  }
+  const { tasks, stats } = parseClaudeOutput(text);
+  _extractedTasks = tasks;
+  renderPreview(tasks);
+  if (statsEl) {
+    const parts = [`${stats.parsed}件のタスクを抽出`];
+    if (stats.headers > 0) parts.push(`見出し${stats.headers}行をスキップ`);
+    if (stats.completedSkipped > 0) parts.push(`完了済${stats.completedSkipped}件をスキップ`);
+    statsEl.textContent = parts.join(' ／ ');
+  }
 }
 
 function renderPreview(tasks) {
@@ -2616,7 +2758,9 @@ async function extractFromNotionPage() {
 
 function openQuickAddModal() {
   document.getElementById('quick-input').value = '';
+  document.getElementById('paste-input').value = '';
   document.getElementById('notion-page-url').value = '';
+  document.getElementById('paste-stats').textContent = '';
   document.getElementById('quick-preview').style.display = 'none';
   _extractedTasks = [];
   switchQuickTab('text');
@@ -2625,8 +2769,12 @@ function openQuickAddModal() {
 }
 
 function submitQuickAdd() {
-  // テキストタブの場合は現在の入力を再パース
-  if (_quickTabMode === 'text') {
+  // 各タブの入力を再パース
+  if (_quickTabMode === 'paste') {
+    const text = document.getElementById('paste-input').value;
+    const { tasks } = parseClaudeOutput(text);
+    _extractedTasks = tasks;
+  } else if (_quickTabMode === 'text') {
     const text = document.getElementById('quick-input').value;
     _extractedTasks = parseQuickInputAll(text);
   }
@@ -2654,7 +2802,12 @@ function submitQuickAdd() {
   const count = _extractedTasks.length;
   const logTitle = _quickTabMode === 'notion' && _pendingExtractSource
     ? `議事録「${_pendingExtractSource}」からタスク追加`
-    : 'クイック追加';
+    : _quickTabMode === 'paste'
+      ? 'Claude出力から一括追加'
+      : 'クイック追加';
+  const logType = _quickTabMode === 'notion' ? 'notion-page'
+                : _quickTabMode === 'paste'  ? 'claude-paste'
+                : 'quick-add';
   const logDetail = addedNames.slice(0, 3).join('、') + (addedNames.length > 3 ? `　他${addedNames.length - 3}件` : '');
   _extractedTasks = [];
   _pendingExtractSource = '';
@@ -2662,7 +2815,7 @@ function submitQuickAdd() {
   closeModal('quick-add-modal');
   renderTasks();
   updateFilterCounts();
-  logActivity({ type: _quickTabMode === 'notion' ? 'notion-page' : 'quick-add', title: logTitle, taskCount: count, detail: logDetail });
+  logActivity({ type: logType, title: logTitle, taskCount: count, detail: logDetail });
   setGlobalStatus(logTitle, `${count}件のタスクを追加しました`, 'ok');
   showInboxBanner(count, addedNames);
   toast(`${count}件のタスクを追加しました`, 'success');
@@ -3161,7 +3314,7 @@ function renderActivityLog() {
   }
   el.innerHTML = activityLog.map(e => {
     const ts = new Date(e.time).toLocaleString('ja-JP', { month:'numeric', day:'numeric', hour:'2-digit', minute:'2-digit' });
-    const icons = { 'notion-page': '📄', 'notion-sync': '🔄', 'quick-add': '⚡', 'manual-add': '✏️' };
+    const icons = { 'notion-page': '📄', 'notion-sync': '🔄', 'quick-add': '⚡', 'manual-add': '✏️', 'claude-paste': '🤖' };
     const icon = icons[e.type] || '📋';
     const entryClass = e.isError ? 'entry-error' : e.taskCount > 0 ? 'entry-ok' : 'entry-zero';
     const countHtml = e.isError
