@@ -198,6 +198,16 @@ function formatDate(y, m, d) {
   return `${y}-${String(m).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
 }
 
+// 楠元/楠本以外の担当者プレフィックス
+const OTHER_ASSIGNEES = [
+  '向井', '橋本', '鎌形', '尾形', '松井', '中島', '池田', '宮崎', '宮さん',
+  '翼', '関羽', 'あかね', '西村', '堀江', '石塚', '松舘', 'マサシ', '森本',
+  '岡田', '矢口', '大川', '野間', '長坂', 'はやた', 'ゆき', 'ゆうけん',
+  'CTO', '社長', 'チーム', '全員', '役員',
+];
+const OTHER_ASSIGNEE_PREFIX_RE = new RegExp(`^(${OTHER_ASSIGNEES.join('|')})[\\s　]*[：:]`);
+const KUSUMOTO_PREFIX_RE = /^楠[元本][\s　]*[：:]/;
+
 function cleanTaskName(line) {
   return line
     .replace(/[\s　]*楠元[\s　]*$/g, '')
@@ -208,8 +218,10 @@ function cleanTaskName(line) {
     .replace(/楠本[\s　]*(が|は|も|に|の|さん)/g, '')
     .replace(/kusumoto[\s　]*/gi, '')
     .replace(/龍矢[\s　]*/g, '')
+    .replace(/@[一-龥ァ-ヴA-Za-z]+(?:[・\/、][一-龥ァ-ヴA-Za-z]+)*/g, '')
     .replace(/^[\[\]☐☑✓✔\s　]+/, '')
     .replace(/^[・\-\*▶→►＞>\s　]+/, '')
+    .replace(/[（(][\s　]*[）)]/g, '')
     .replace(/[、。\s　]+$/g, '')
     .trim();
 }
@@ -220,29 +232,45 @@ function extractKusumotoTasks(blocks, sourceName) {
   let inActionSection = false;
 
   for (const block of blocks) {
-    const { text, type, checked, mentionedUserIds } = block;
+    const { text, type, checked, mentionedUserIds, depth } = block;
 
+    // 見出しはセクション判定のみ
     if (['heading_1', 'heading_2', 'heading_3'].includes(type)) {
       inActionSection = ACTION_SECTION_PATTERNS.some(p => p.test(text));
-      if (!KUSUMOTO_PATTERNS.some(p => p.test(text))) continue;
-      // 見出しに楠元/楠本が含まれる場合は以降でタスクとして処理
+      continue;
     }
 
+    if (!text || text.length < 4) continue;
     if (type === 'to_do' && checked === true) continue;
+    if (text.length > 180) continue;                                        // transcript
+    if (/^\d{1,2}:\d{2}/.test(text.trim())) continue;                       // timestamp
+    if (depth !== undefined && depth >= 3) continue;                        // deep nest
+    if (/^[【\[]\s*(日時|日付|参加者|出席者|議事録|議題|アジェンダ|目的|背景|凡例)\s*[】\]]/.test(text)) continue;
 
     const isMentioned = mentionedUserIds?.includes(KUSUMOTO_USER_ID);
     const isKusumoto = isMentioned || KUSUMOTO_PATTERNS.some(p => p.test(text));
     const isUncheckedTodo = type === 'to_do' && checked === false;
-    const inActionBullet = inActionSection &&
-      (isUncheckedTodo || ['bulleted_list_item', 'numbered_list_item'].includes(type));
+    const isBullet = ['bulleted_list_item', 'numbered_list_item'].includes(type);
+    const isCallout = type === 'callout';
 
-    if (!isKusumoto && !inActionBullet) continue;
-    if (!text || text.length < 4) continue;
+    const inActionBullet      = inActionSection && (isUncheckedTodo || isBullet);
+    const isDecisionCallout   = isCallout && isKusumoto && /決定事項|アクション/.test(text);
+    const hasKusumotoPrefix   = KUSUMOTO_PREFIX_RE.test(text);
+    const hasKusumotoAtMention = isBullet && /@\S*楠[元本]/.test(text);
+    const isCandidate = inActionBullet || isDecisionCallout || hasKusumotoPrefix || hasKusumotoAtMention || isMentioned;
+    if (!isCandidate) continue;
+
+    // 他担当者プレフィックスで始まる場合はスキップ
+    if (OTHER_ASSIGNEE_PREFIX_RE.test(text) && !hasKusumotoPrefix) continue;
 
     let name = cleanTaskName(text);
     if (!name || name.length < 2) continue;
-    // 「決定事項：」プレフィックスを除去
-    name = name.replace(/^決定事項[：:]\s*/, '').replace(/^アクションアイテム[：:]\s*/, '').trim();
+    name = name
+      .replace(/^決定事項[：:]\s*/, '')
+      .replace(/^アクションアイテム[：:]\s*/, '')
+      .replace(/[（(][\s　]*[）)]/g, '')
+      .replace(/\s{2,}/g, ' ')
+      .trim();
     if (!name || name.length < 2) continue;
 
     const key = name.replace(/\s/g, '');

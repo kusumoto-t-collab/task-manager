@@ -317,12 +317,55 @@ function assertEq(a, b, msg) { if (a !== b) throw new Error(`${msg || ''} 期待
     const tasks = window.extractKusumotoTasks(blocks, 'テスト議事録');
     assert(tasks.length >= 1, '楠本パターンが検出されない');
   });
-  test('見出しに楠元が含まれてもタスクになる', () => {
+  test('見出しはタスク化されない（セクション判定のみ）', () => {
+    // 議事録の議題見出しはタスクではないため、見出し単体ではタスク化しない
     const blocks = [
       { text: 'AITOKYO是正工事 未対応問題 @松井・楠元', type: 'heading_2', checked: null, depth: 0 }
     ];
     const tasks = window.extractKusumotoTasks(blocks, 'テスト議事録');
-    assert(tasks.length >= 1, '見出し内の楠元が検出されない');
+    assertEq(tasks.length, 0, '見出しが誤ってタスク化された');
+  });
+  test('他担当者プレフィックスのバレットはスキップされる', () => {
+    const blocks = [
+      { text: 'アクションアイテム', type: 'heading_3', depth: 0 },
+      { text: '向井：融資状況の確認', type: 'to_do', checked: false, depth: 0 },
+      { text: '楠本：融資面談に参加', type: 'to_do', checked: false, depth: 0 },
+      { text: 'チーム：KPI作成', type: 'to_do', checked: false, depth: 0 },
+    ];
+    const tasks = window.extractKusumotoTasks(blocks, 'テスト議事録');
+    assertEq(tasks.length, 1, '楠本だけが残るはず');
+    assert(tasks[0].name.includes('融資面談'), 'tasks[0]: ' + tasks[0].name);
+  });
+  test('長文の paragraph（transcript）はスキップされる', () => {
+    const longText = 'あ'.repeat(250) + '楠元';
+    const blocks = [
+      { text: longText, type: 'paragraph', depth: 0 }
+    ];
+    const tasks = window.extractKusumotoTasks(blocks, 'テスト議事録');
+    assertEq(tasks.length, 0, '長文がスキップされない');
+  });
+  test('深いネストのバレットはスキップされる', () => {
+    const blocks = [
+      { text: '議論メモで楠元が話した内容の細かい補足', type: 'bulleted_list_item', depth: 3 }
+    ];
+    const tasks = window.extractKusumotoTasks(blocks, 'テスト議事録');
+    assertEq(tasks.length, 0, '深いネストがスキップされない');
+  });
+  test('@楠元 mentionのバレットは検出される', () => {
+    const blocks = [
+      { text: 'Shopifyテーマ実装（5月末80%目標） @向井・楠元', type: 'bulleted_list_item', depth: 0 }
+    ];
+    const tasks = window.extractKusumotoTasks(blocks, 'テスト議事録');
+    assertEq(tasks.length, 1, '@楠元バレットが検出されない');
+    assert(!tasks[0].name.includes('@'), '@担当者が残ってる: ' + tasks[0].name);
+  });
+  test('【参加者】【日時】メタデータ行はスキップされる', () => {
+    const blocks = [
+      { text: '【参加者】 鎌形・橋本・向井・楠元', type: 'paragraph', depth: 0 },
+      { text: '【日時】 2026/05/22 15:00〜17:00', type: 'paragraph', depth: 0 },
+    ];
+    const tasks = window.extractKusumotoTasks(blocks, 'テスト議事録');
+    assertEq(tasks.length, 0, 'メタデータがタスク化された');
   });
   test('「決定事項：」プレフィックスが除去される', () => {
     const blocks = [

@@ -2597,8 +2597,10 @@ function cleanTaskName(line) {
     .replace(/楠本[\s　]*(が|は|も|に|の|さん)/g, '') // 「楠本が〜」
     .replace(/kusumoto[\s　]*/gi, '')
     .replace(/龍矢[\s　]*/g, '')
+    .replace(/@[一-龥ァ-ヴA-Za-z]+(?:[・\/、][一-龥ァ-ヴA-Za-z]+)*/g, '') // @担当者・@松井・楠元 等
     .replace(/^[\[\]☐☑✓✔\s　]+/, '')             // チェックボックス記号
     .replace(/^[・\-\*▶→►＞>\s　]+/, '')          // 箇条書き記号
+    .replace(/[（(][\s　　]*[）)]/g, '')           // 空括弧（）()
     .replace(/[、。\s　]+$/g, '')
     .trim();
 }
@@ -2621,32 +2623,67 @@ function inferPriorityFromText(text) {
 }
 
 // スキル定義準拠のタスク抽出
+// 楠元/楠本以外の担当者プレフィックス（"向井：" "鎌形：" など）
+const OTHER_ASSIGNEES = [
+  '向井', '橋本', '鎌形', '尾形', '松井', '中島', '池田', '宮崎', '宮さん',
+  '翼', '関羽', 'あかね', '西村', '堀江', '石塚', '松舘', 'マサシ', '森本',
+  '岡田', '矢口', '大川', '野間', '長坂', 'はやた', 'ゆき', 'ゆうけん',
+  'CTO', '社長', 'チーム', '全員', '役員',
+];
+const OTHER_ASSIGNEE_PREFIX_RE = new RegExp(`^(${OTHER_ASSIGNEES.join('|')})[\\s　]*[：:]`);
+const KUSUMOTO_PREFIX_RE = /^楠[元本][\s　]*[：:]/;
+
 function extractKusumotoTasks(blocks, sourceName) {
   const extracted = [];
   const seen = new Set();
   let inActionSection = false;
 
   for (const block of blocks) {
-    const { text, type, checked } = block;
+    const { text, type, checked, depth } = block;
 
-    // ① 見出しブロック
+    // ① 見出しブロック：セクション判定のみ（見出し自体はタスク化しない）
     if (['heading_1', 'heading_2', 'heading_3'].includes(type)) {
       inActionSection = ACTION_SECTION_PATTERNS.some(p => p.test(text));
-      // 見出しに楠元/楠本が含まれる場合はそのままタスクとして拾う（continueしない）
-      if (!KUSUMOTO_PATTERNS.some(p => p.test(text))) continue;
+      continue;
     }
+
+    if (!text || text.length < 4) continue;
 
     // ② 完了済みチェックボックスはスキップ
     if (type === 'to_do' && checked === true) continue;
 
+    // ③ transcript（会議文字起こし）と思われる長文はスキップ
+    if (text.length > 180) continue;
+
+    // ④ タイムスタンプ行 "09:30 鎌形：〜" もスキップ
+    if (/^\d{1,2}:\d{2}/.test(text.trim())) continue;
+
+    // ⑤ 深いネスト（議論メモのサブ説明）はスキップ
+    if (depth !== undefined && depth >= 3) continue;
+
+    // ⑥ メタデータ行（【日時】【参加者】【出席者】など）はスキップ
+    if (/^[【\[]\s*(日時|日付|参加者|出席者|議事録|議題|アジェンダ|目的|背景|凡例)\s*[】\]]/.test(text)) continue;
+
     const isKusumoto = KUSUMOTO_PATTERNS.some(p => p.test(text));
     const isUncheckedTodo = type === 'to_do' && checked === false;
-    // アクションセクション内の箇条書き・チェックボックスも楠元担当と判断
-    const inActionBullet = inActionSection &&
-      (isUncheckedTodo || ['bulleted_list_item', 'numbered_list_item'].includes(type));
+    const isBullet = ['bulleted_list_item', 'numbered_list_item'].includes(type);
+    const isCallout = type === 'callout';
 
-    if (!isKusumoto && !inActionBullet) continue;
-    if (!text || text.length < 4) continue;
+    // ⑦ 厳密な候補判定：以下のいずれかのみタスク化
+    //   (a) アクションセクション内の未完了todo/bullet
+    //   (b) 決定事項/アクションを含むcalloutで楠元/楠本に言及
+    //   (c) 「楠元：」「楠本：」で始まる行
+    //   (d) @楠元/@楠本 を含むbullet
+    const inActionBullet = inActionSection && (isUncheckedTodo || isBullet);
+    const isDecisionCallout = isCallout && isKusumoto && /決定事項|アクション/.test(text);
+    const hasKusumotoPrefix = KUSUMOTO_PREFIX_RE.test(text);
+    // @担当者の中に楠元/楠本が含まれる場合（例：「@松井・楠元」「@向井・楠元」）
+    const hasKusumotoAtMention = isBullet && /@\S*楠[元本]/.test(text);
+    const isCandidate = inActionBullet || isDecisionCallout || hasKusumotoPrefix || hasKusumotoAtMention;
+    if (!isCandidate) continue;
+
+    // ⑧ 他の担当者プレフィックス（"向井：〜" など）で始まる行は楠元のタスクではない
+    if (OTHER_ASSIGNEE_PREFIX_RE.test(text) && !hasKusumotoPrefix) continue;
 
     const taskName = cleanTaskName(text);
     if (!taskName || taskName.length < 2) continue;
@@ -2662,10 +2699,12 @@ function extractKusumotoTasks(blocks, sourceName) {
     // parseQuickInputで期日・優先度を取得
     const parsed = parseQuickInput(taskName);
 
-    // 「決定事項：」プレフィックスを除去してタスク名をクリーン
+    // 「決定事項：」プレフィックスと空括弧を除去してタスク名をクリーン
     const cleanedName = (parsed?.name || taskName)
       .replace(/^決定事項[：:]\s*/g, '')
       .replace(/^アクションアイテム[：:]\s*/g, '')
+      .replace(/[（(][\s　]*[）)]/g, '')        // 期日抽出後に残る空括弧
+      .replace(/\s{2,}/g, ' ')                  // 連続スペース整形
       .trim();
 
     if (!cleanedName || cleanedName.length < 2) continue;
