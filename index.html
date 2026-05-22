@@ -1102,6 +1102,76 @@
     transition: color .15s;
   }
   .inbox-banner-close:hover { color: var(--text); }
+
+  /* ===== グローバル処理ステータスバー ===== */
+  .global-status-bar {
+    display: none;
+    align-items: center;
+    gap: 10px;
+    background: var(--surface);
+    border: 1px solid var(--accent);
+    border-left: 4px solid var(--accent);
+    border-radius: 6px;
+    padding: 9px 14px;
+    margin-bottom: 12px;
+    font-size: 13px;
+    color: var(--text);
+    animation: banner-in .25s ease;
+  }
+  .global-status-bar.processing { display: flex; }
+  .global-status-bar.done-ok  { display: flex; border-left-color: var(--success); background: #f0fdf4; }
+  .global-status-bar.done-err { display: flex; border-left-color: var(--danger);  background: #fff5f5; }
+  .gs-spin {
+    display: inline-block;
+    font-size: 15px;
+    animation: gs-rotate 1s linear infinite;
+    flex-shrink: 0;
+  }
+  .gs-steps { flex: 1; }
+  .gs-title { font-weight: 600; font-size: 12px; color: var(--text2); margin-bottom: 2px; }
+  .gs-detail { font-size: 12px; color: var(--text3); }
+  @keyframes gs-rotate { to { transform: rotate(360deg); } }
+
+  /* ===== アクティビティログ ===== */
+  .activity-empty {
+    text-align: center;
+    padding: 48px 24px;
+    color: var(--text3);
+    font-size: 13px;
+  }
+  .activity-entry {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    padding: 11px 14px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    margin-bottom: 8px;
+    background: var(--surface);
+    transition: background .15s;
+  }
+  .activity-entry:hover { background: var(--surface2); }
+  .activity-entry.entry-error { border-left: 3px solid var(--danger); }
+  .activity-entry.entry-ok    { border-left: 3px solid var(--success); }
+  .activity-entry.entry-zero  { border-left: 3px solid var(--border); opacity: .8; }
+  .activity-icon { font-size: 20px; flex-shrink: 0; line-height: 1.4; }
+  .activity-body { flex: 1; min-width: 0; }
+  .activity-title {
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .activity-summary {
+    font-size: 12px;
+    margin-top: 3px;
+  }
+  .activity-summary .cnt-added { color: var(--accent); font-weight: 700; }
+  .activity-summary .cnt-zero  { color: var(--text3); }
+  .activity-summary .cnt-err   { color: var(--danger); }
+  .activity-ts { font-size: 11px; color: var(--text3); flex-shrink: 0; white-space: nowrap; }
 </style>
 </head>
 <body>
@@ -1246,6 +1316,16 @@
     <div class="tabs">
       <button class="tab active" onclick="switchTab('tasks', this)">タスク一覧</button>
       <button class="tab" onclick="switchTab('minutes', this)">確認済み議事録</button>
+      <button class="tab" id="tab-log-btn" onclick="switchTab('log', this)">📋 ログ</button>
+    </div>
+
+    <!-- グローバル処理ステータスバー -->
+    <div class="global-status-bar" id="global-status-bar">
+      <span class="gs-spin" id="gs-icon">⟳</span>
+      <div class="gs-steps">
+        <div class="gs-title" id="gs-title"></div>
+        <div class="gs-detail" id="gs-detail"></div>
+      </div>
     </div>
 
     <!-- タスク一覧タブ -->
@@ -1284,6 +1364,15 @@
         <button class="btn btn-secondary btn-sm" onclick="openMinutesModal()">＋ 追加</button>
       </div>
       <div id="minutes-list"></div>
+    </div>
+
+    <!-- ログタブ -->
+    <div id="tab-log" class="tab-content">
+      <div class="content-header">
+        <div class="content-title">📋 処理ログ・お知らせ</div>
+        <button class="btn btn-secondary btn-sm" onclick="clearActivityLog()">ログを消去</button>
+      </div>
+      <div id="activity-log-list"></div>
     </div>
   </div>
 </div>
@@ -1996,6 +2085,13 @@ function switchTab(tab, btn) {
   btn.classList.add('active');
   document.getElementById(`tab-${tab}`).classList.add('active');
   if (tab === 'minutes') renderMinutes();
+  if (tab === 'log') {
+    renderActivityLog();
+    // 既読にする
+    activityLog.forEach(e => e.seen = true);
+    saveActivityLog();
+    _updateLogBadge();
+  }
 }
 
 // ========================================
@@ -2184,6 +2280,7 @@ function parseQuickInputAll(rawText) {
 
 let _quickTabMode = 'text';
 let _extractedTasks = [];
+let _pendingExtractSource = '';
 
 function switchQuickTab(mode) {
   _quickTabMode = mode;
@@ -2411,7 +2508,9 @@ async function extractFromNotionPage() {
   if (btnEl) btnEl.disabled = true;
   btnTxt.textContent = '処理中...';
   setExtractProgress(10, 'ページ情報を取得中...');
+  setGlobalStatus('議事録を読み込み中...', 'ページ情報を取得中', 'processing');
 
+  let sourceName = 'Notion議事録';
   try {
     // ページタイトル取得
     setExtractProgress(20, 'ページ情報を取得中...');
@@ -2423,16 +2522,18 @@ async function extractFromNotionPage() {
 
     // タイトル抽出
     const titleProp = Object.values(pageData.properties || {}).find(p => p.type === 'title');
-    const sourceName = titleProp
+    sourceName = titleProp
       ? (titleProp.title || []).map(t => t.plain_text).join('').trim()
       : 'Notion議事録';
 
     // ブロックを全取得
     setExtractProgress(40, `「${sourceName}」のブロックを読み込み中...`);
+    setGlobalStatus('議事録を読み込み中...', `「${sourceName}」のブロックを取得中`, 'processing');
     const blocks = await getAllBlocksWithMeta(pageId, token);
 
     // タスク抽出
     setExtractProgress(80, `${blocks.length}ブロックからタスクを抽出中...`);
+    setGlobalStatus('議事録を読み込み中...', `${blocks.length}ブロックからタスクを抽出中`, 'processing');
     const extracted = extractKusumotoTasks(blocks, sourceName);
 
     setExtractProgress(100, `完了！ ${extracted.length}件のタスクを検出`);
@@ -2442,13 +2543,19 @@ async function extractFromNotionPage() {
     renderPreview(extracted);
 
     if (extracted.length === 0) {
+      setGlobalStatus(`「${sourceName}」を読み込みました`, '楠元が含まれる行が見つかりませんでした（0件）', 'ok');
       toast('「楠元」が含まれる行が見つかりませんでした', 'error');
     } else {
+      setGlobalStatus(`「${sourceName}」を読み込みました`, `${extracted.length}件のタスクを検出 — 追加ボタンで登録できます`, 'ok');
       toast(`${extracted.length}件のタスクを検出しました`, 'success');
     }
+    // ※実際の「追加」はsubmitQuickAdd時にログ記録
+    _pendingExtractSource = sourceName;
   } catch (e) {
     console.error(e);
     setExtractProgress(null);
+    setGlobalStatus(`「${sourceName}」の読み込みに失敗`, e.message, 'error');
+    logActivity({ type: 'notion-page', title: sourceName, taskCount: 0, detail: e.message, isError: true });
     toast('ページ取得に失敗しました: ' + e.message, 'error');
   } finally {
     if (btnEl) btnEl.disabled = false;
@@ -2494,11 +2601,18 @@ function submitQuickAdd() {
   });
 
   const count = _extractedTasks.length;
+  const logTitle = _quickTabMode === 'notion' && _pendingExtractSource
+    ? `議事録「${_pendingExtractSource}」からタスク追加`
+    : 'クイック追加';
+  const logDetail = addedNames.slice(0, 3).join('、') + (addedNames.length > 3 ? `　他${addedNames.length - 3}件` : '');
   _extractedTasks = [];
+  _pendingExtractSource = '';
   saveData();
   closeModal('quick-add-modal');
   renderTasks();
   updateFilterCounts();
+  logActivity({ type: _quickTabMode === 'notion' ? 'notion-page' : 'quick-add', title: logTitle, taskCount: count, detail: logDetail });
+  setGlobalStatus(logTitle, `${count}件のタスクを追加しました`, 'ok');
   showInboxBanner(count, addedNames);
   toast(`${count}件のタスクを追加しました`, 'success');
 }
@@ -2532,6 +2646,7 @@ function addTask() {
   closeModal('add-task-modal');
   renderTasks();
   updateFilterCounts();
+  logActivity({ type: 'manual-add', title: `手動追加：${name}`, taskCount: 1, detail: newTask.source || '' });
   showInboxBanner(1, [name]);
   toast('タスクを追加しました', 'success');
 
@@ -2913,6 +3028,8 @@ async function fetchFromNotion() {
     updateLastFetchDisplay();
 
     if (newCount > 0) showInboxBanner(newCount, []);
+    logActivity({ type: 'notion-sync', title: 'Notion DBから同期', taskCount: newCount, detail: `新規 ${newCount}件 / 更新 ${updatedCount}件` });
+    setGlobalStatus('Notion同期完了', `新規 ${newCount}件 / 更新 ${updatedCount}件`, 'ok');
     toast(`Notion取得完了（新規 ${newCount}件 / 更新 ${updatedCount}件）`, 'success');
   } catch (e) {
     console.error(e);
@@ -2946,6 +3063,104 @@ async function syncAllToNotion() {
 // ========================================
 function closeModal(id) {
   document.getElementById(id).classList.remove('open');
+}
+
+// ========================================
+// アクティビティログ
+// ========================================
+let activityLog = (function() {
+  try { return JSON.parse(localStorage.getItem('kusumoto-activity-log') || '[]'); } catch { return []; }
+})();
+
+function saveActivityLog() {
+  try { localStorage.setItem('kusumoto-activity-log', JSON.stringify(activityLog.slice(0, 100))); } catch {}
+}
+
+// type: 'notion-page' | 'notion-sync' | 'quick-add' | 'manual-add'
+function logActivity({ type, title, taskCount, detail, isError }) {
+  const entry = {
+    id: Date.now(),
+    type,
+    title,
+    taskCount: taskCount ?? 0,
+    detail: detail || '',
+    isError: !!isError,
+    time: new Date().toISOString(),
+  };
+  activityLog.unshift(entry);
+  saveActivityLog();
+  renderActivityLog();
+  // ログタブバッジを更新
+  _updateLogBadge();
+}
+
+function _updateLogBadge() {
+  const btn = document.getElementById('tab-log-btn');
+  if (!btn) return;
+  const unread = activityLog.filter(e => !e.seen).length;
+  btn.textContent = unread > 0 ? `📋 ログ (${unread})` : '📋 ログ';
+}
+
+function renderActivityLog() {
+  const el = document.getElementById('activity-log-list');
+  if (!el) return;
+  if (activityLog.length === 0) {
+    el.innerHTML = '<div class="activity-empty">まだ処理ログがありません。<br>議事録URLからタスクを抽出すると記録されます。</div>';
+    return;
+  }
+  el.innerHTML = activityLog.map(e => {
+    const ts = new Date(e.time).toLocaleString('ja-JP', { month:'numeric', day:'numeric', hour:'2-digit', minute:'2-digit' });
+    const icons = { 'notion-page': '📄', 'notion-sync': '🔄', 'quick-add': '⚡', 'manual-add': '✏️' };
+    const icon = icons[e.type] || '📋';
+    const entryClass = e.isError ? 'entry-error' : e.taskCount > 0 ? 'entry-ok' : 'entry-zero';
+    const countHtml = e.isError
+      ? `<span class="cnt-err">エラー</span>`
+      : e.taskCount > 0
+        ? `<span class="cnt-added">${e.taskCount}件追加</span>`
+        : `<span class="cnt-zero">0件（タスクなし）</span>`;
+    return `
+      <div class="activity-entry ${entryClass}">
+        <div class="activity-icon">${icon}</div>
+        <div class="activity-body">
+          <div class="activity-title">${escHtml(e.title)}</div>
+          <div class="activity-summary">${countHtml}${e.detail ? `　<span style="color:var(--text3)">${escHtml(e.detail)}</span>` : ''}</div>
+        </div>
+        <div class="activity-ts">${ts}</div>
+      </div>
+    `;
+  }).join('');
+}
+
+function clearActivityLog() {
+  if (!confirm('処理ログをすべて消去しますか？')) return;
+  activityLog = [];
+  saveActivityLog();
+  renderActivityLog();
+  _updateLogBadge();
+}
+
+// ========================================
+// グローバル処理ステータスバー
+// ========================================
+let _gsTimer = null;
+
+function setGlobalStatus(title, detail, state) {
+  // state: 'processing' | 'ok' | 'error' | null（非表示）
+  const bar  = document.getElementById('global-status-bar');
+  const icon = document.getElementById('gs-icon');
+  const ttl  = document.getElementById('gs-title');
+  const dtl  = document.getElementById('gs-detail');
+  if (!bar) return;
+  clearTimeout(_gsTimer);
+  if (!state) { bar.className = 'global-status-bar'; return; }
+  bar.className = `global-status-bar ${state === 'processing' ? 'processing' : state === 'ok' ? 'done-ok' : 'done-err'}`;
+  icon.textContent = state === 'processing' ? '⟳' : state === 'ok' ? '✅' : '❌';
+  icon.style.animation = state === 'processing' ? '' : 'none';
+  ttl.textContent  = title  || '';
+  dtl.textContent  = detail || '';
+  if (state !== 'processing') {
+    _gsTimer = setTimeout(() => { bar.className = 'global-status-bar'; }, 6000);
+  }
 }
 
 // ========================================
@@ -3084,6 +3299,7 @@ loadToken();
 loadProxyUrl();
 updateLastFetchDisplay();
 loadInboxBanner();
+_updateLogBadge();
 renderTasks();
 
 // 24時間経過していたらNotionから自動取得
