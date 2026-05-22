@@ -1030,6 +1030,78 @@
   .detail-panel-backdrop.open {
     display: block;
   }
+
+  /* ===== プログレスバー（議事録読み込み） ===== */
+  .extract-progress {
+    display: none;
+    margin-top: 10px;
+  }
+  .extract-progress-track {
+    background: var(--border);
+    border-radius: 2px;
+    height: 4px;
+    overflow: hidden;
+  }
+  .extract-progress-fill {
+    height: 100%;
+    background: var(--accent);
+    border-radius: 2px;
+    width: 0%;
+    transition: width 0.35s cubic-bezier(.4,0,.2,1);
+  }
+  .extract-progress-text {
+    font-size: 11px;
+    color: var(--text3);
+    margin-top: 5px;
+    text-align: center;
+    letter-spacing: 0.03em;
+  }
+
+  /* ===== 新着通知バナー ===== */
+  .inbox-banner {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    background: #eef2ff;
+    border: 1px solid var(--accent);
+    border-left: 4px solid var(--accent);
+    border-radius: 6px;
+    padding: 9px 12px;
+    margin-bottom: 14px;
+    font-size: 13px;
+    color: var(--text);
+    animation: banner-in .3s ease;
+  }
+  @keyframes banner-in {
+    from { opacity: 0; transform: translateY(-6px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+  .inbox-banner-text { flex: 1; }
+  .inbox-banner-text strong { color: var(--accent); }
+  .new-badge {
+    display: inline-block;
+    background: var(--accent);
+    color: #fff;
+    font-size: 9px;
+    font-weight: 700;
+    padding: 1px 5px;
+    border-radius: 3px;
+    letter-spacing: 0.05em;
+    margin-right: 6px;
+    vertical-align: middle;
+  }
+  .inbox-banner-close {
+    background: none;
+    border: none;
+    cursor: pointer;
+    color: var(--text3);
+    font-size: 16px;
+    padding: 0;
+    line-height: 1;
+    flex-shrink: 0;
+    transition: color .15s;
+  }
+  .inbox-banner-close:hover { color: var(--text); }
 </style>
 </head>
 <body>
@@ -1133,6 +1205,14 @@
     </div>
 
     <div class="sidebar-section">
+      <div class="sidebar-label">新着</div>
+      <button class="filter-btn" id="fc-new-btn" onclick="setFilter('new', this)">
+        <span>🔔 新着タスク</span>
+        <span class="filter-count" id="fc-new">0</span>
+      </button>
+    </div>
+
+    <div class="sidebar-section">
       <div class="sidebar-label">領域</div>
       <button class="filter-btn" onclick="setFilter('domain:プロダクト', this)">プロダクト</button>
       <button class="filter-btn" onclick="setFilter('domain:PBGH', this)">PBGH</button>
@@ -1184,6 +1264,16 @@
           </select>
         </div>
       </div>
+      <!-- 新着通知バナー -->
+      <div class="inbox-banner" id="inbox-banner" style="display:none;">
+        <div class="inbox-banner-text">
+          <span class="new-badge">NEW</span>
+          <span id="inbox-banner-msg"></span>
+        </div>
+        <button class="btn btn-primary" style="font-size:11px; padding:4px 10px; white-space:nowrap;" onclick="viewNewTasks()">🔔 新着を見る</button>
+        <button class="inbox-banner-close" title="閉じる" onclick="dismissInboxBanner()">×</button>
+      </div>
+
       <div id="task-list"></div>
     </div>
 
@@ -1344,9 +1434,16 @@
         <span style="color: var(--text3);">「〜〜〜　楠元」パターンの行を自動で抽出します。Notion Tokenが必要です。</span>
       </div>
       <input type="text" class="form-input" id="notion-page-url" placeholder="https://www.notion.so/..." style="margin-bottom: 10px;">
-      <button class="btn btn-secondary" style="width:100%; justify-content:center;" onclick="extractFromNotionPage()">
+      <button class="btn btn-secondary" style="width:100%; justify-content:center;" onclick="extractFromNotionPage()" id="extract-btn">
         <span id="extract-btn-text">📄 ページを読み込んでタスク抽出</span>
       </button>
+      <!-- プログレスバー -->
+      <div class="extract-progress" id="extract-progress">
+        <div class="extract-progress-track">
+          <div class="extract-progress-fill" id="extract-progress-fill"></div>
+        </div>
+        <div class="extract-progress-text" id="extract-progress-text">読み込み中...</div>
+      </div>
     </div>
 
     <!-- 共通プレビュー -->
@@ -1605,6 +1702,7 @@ function renderTasks() {
     if (currentFilter === 'all') return true;
     if (currentFilter === 'due-soon') return t.deadline && t.deadline <= sevenDaysStr;
     if (currentFilter === 'no-deadline') return !t.deadline;
+    if (currentFilter === 'new') return t.addedAt && (Date.now() - new Date(t.addedAt).getTime() < 24 * 3600 * 1000);
     if (currentFilter.startsWith('domain:')) return t.domain === currentFilter.replace('domain:', '');
     return t.status === currentFilter;
   });
@@ -1849,6 +1947,13 @@ function updateFilterCounts() {
   if (noDeadlineBtn) {
     noDeadlineBtn.classList.toggle('pulse-warn', noDeadlineCount > 0);
   }
+
+  // 新着タスク（24時間以内）
+  const newCount = tasks.filter(t => t.addedAt && t.status !== '完了' &&
+    (Date.now() - new Date(t.addedAt).getTime() < 24 * 3600 * 1000)).length;
+  document.getElementById('fc-new').textContent = newCount;
+  const newBtn = document.getElementById('fc-new-btn');
+  if (newBtn) newBtn.style.opacity = newCount > 0 ? '1' : '0.5';
 }
 
 function renderMinutes() {
@@ -1877,7 +1982,7 @@ function setFilter(filter, btn) {
   btn.classList.add('active');
   const labels = {
     all: 'すべてのタスク', 'アラート': '⚠️ アラート', '未着手': '未着手', '進行中': '進行中', '完了': '✅ 完了', '保留': '保留',
-    'due-soon': '🔥 7日以内期限', 'no-deadline': '📭 期日未設定',
+    'due-soon': '🔥 7日以内期限', 'no-deadline': '📭 期日未設定', 'new': '🔔 新着タスク（24h以内）',
     'domain:プロダクト': 'プロダクト', 'domain:PBGH': 'PBGH', 'domain:総務': '総務', 'domain:unique': 'unique'
   };
   document.getElementById('filter-label').textContent = labels[filter] || filter;
@@ -2288,11 +2393,15 @@ async function extractFromNotionPage() {
   const pageId = extractPageIdFromUrl(url);
   if (!pageId) { toast('有効なNotionページURLを入力してください', 'error'); return; }
 
-  const btn = document.getElementById('extract-btn-text');
-  btn.textContent = '読み込み中...';
+  const btnEl  = document.getElementById('extract-btn');
+  const btnTxt = document.getElementById('extract-btn-text');
+  if (btnEl) btnEl.disabled = true;
+  btnTxt.textContent = '処理中...';
+  setExtractProgress(10, 'ページ情報を取得中...');
 
   try {
     // ページタイトル取得
+    setExtractProgress(20, 'ページ情報を取得中...');
     const pageRes = await notionFetch(`/v1/pages/${pageId}`, {
       headers: { 'Authorization': `Bearer ${token}`, 'Notion-Version': '2022-06-28' }
     });
@@ -2305,9 +2414,16 @@ async function extractFromNotionPage() {
       ? (titleProp.title || []).map(t => t.plain_text).join('').trim()
       : 'Notion議事録';
 
-    // ブロックをメタ情報付きで取得してタスク抽出
+    // ブロックを全取得
+    setExtractProgress(40, `「${sourceName}」のブロックを読み込み中...`);
     const blocks = await getAllBlocksWithMeta(pageId, token);
+
+    // タスク抽出
+    setExtractProgress(80, `${blocks.length}ブロックからタスクを抽出中...`);
     const extracted = extractKusumotoTasks(blocks, sourceName);
+
+    setExtractProgress(100, `完了！ ${extracted.length}件のタスクを検出`);
+    setTimeout(() => setExtractProgress(null), 2000);
 
     _extractedTasks = extracted;
     renderPreview(extracted);
@@ -2319,9 +2435,11 @@ async function extractFromNotionPage() {
     }
   } catch (e) {
     console.error(e);
+    setExtractProgress(null);
     toast('ページ取得に失敗しました: ' + e.message, 'error');
   } finally {
-    btn.textContent = '📄 ページを読み込んでタスク抽出';
+    if (btnEl) btnEl.disabled = false;
+    btnTxt.textContent = '📄 ページを読み込んでタスク抽出';
   }
 }
 
@@ -2344,7 +2462,10 @@ function submitQuickAdd() {
 
   if (_extractedTasks.length === 0) { toast('追加するタスクがありません', 'error'); return; }
 
+  const now = new Date().toISOString();
+  const addedNames = [];
   _extractedTasks.forEach(p => {
+    addedNames.push(p.name);
     tasks.unshift({
       id: 't' + Date.now() + Math.random().toString(36).slice(2,6),
       name: p.name,
@@ -2354,7 +2475,8 @@ function submitQuickAdd() {
       priority: p.priority,
       domain: p.domain,
       note: p.note || '',
-      notionId: null
+      notionId: null,
+      addedAt: now,
     });
   });
 
@@ -2363,6 +2485,8 @@ function submitQuickAdd() {
   saveData();
   closeModal('quick-add-modal');
   renderTasks();
+  updateFilterCounts();
+  showInboxBanner(count, addedNames);
   toast(`${count}件のタスクを追加しました`, 'success');
 }
 
@@ -2386,13 +2510,16 @@ function addTask() {
     priority: document.getElementById('new-task-priority').value,
     domain: document.getElementById('new-task-domain').value,
     note: document.getElementById('new-task-note').value,
-    notionId: null
+    notionId: null,
+    addedAt: new Date().toISOString(),
   };
 
   tasks.unshift(newTask);
   saveData();
   closeModal('add-task-modal');
   renderTasks();
+  updateFilterCounts();
+  showInboxBanner(1, [name]);
   toast('タスクを追加しました', 'success');
 
   ['new-task-name', 'new-task-source', 'new-task-deadline', 'new-task-note'].forEach(id => {
@@ -2757,7 +2884,8 @@ async function fetchFromNotion() {
         tasks.push({
           id: 'n_' + page.id.replace(/-/g, '').slice(0, 16),
           name, status, note, priority, domain, deadline, source,
-          notionId: page.id
+          notionId: page.id,
+          addedAt: new Date().toISOString(),
         });
         newCount++;
       }
@@ -2771,6 +2899,7 @@ async function fetchFromNotion() {
     localStorage.setItem('notion-last-fetch-ms', Date.now());
     updateLastFetchDisplay();
 
+    if (newCount > 0) showInboxBanner(newCount, []);
     toast(`Notion取得完了（新規 ${newCount}件 / 更新 ${updatedCount}件）`, 'success');
   } catch (e) {
     console.error(e);
@@ -2804,6 +2933,64 @@ async function syncAllToNotion() {
 // ========================================
 function closeModal(id) {
   document.getElementById(id).classList.remove('open');
+}
+
+// ========================================
+// プログレスバー（議事録読み込み）
+// ========================================
+function setExtractProgress(pct, text) {
+  const el   = document.getElementById('extract-progress');
+  const fill = document.getElementById('extract-progress-fill');
+  const lbl  = document.getElementById('extract-progress-text');
+  if (!el) return;
+  if (pct === null) { el.style.display = 'none'; return; }
+  el.style.display = 'block';
+  fill.style.width = pct + '%';
+  if (text) lbl.textContent = text;
+}
+
+// ========================================
+// 新着通知バナー
+// ========================================
+function showInboxBanner(count, names) {
+  const notif = { count, names: names || [], time: Date.now() };
+  localStorage.setItem('inbox-notification', JSON.stringify(notif));
+  _renderInboxBanner(notif);
+}
+
+function _renderInboxBanner(notif) {
+  const el  = document.getElementById('inbox-banner');
+  const msg = document.getElementById('inbox-banner-msg');
+  if (!el || !notif) return;
+  const at = new Date(notif.time).toLocaleString('ja-JP', { month:'numeric', day:'numeric', hour:'2-digit', minute:'2-digit' });
+  msg.innerHTML = `<strong>${notif.count}件</strong>のタスクが追加されました（${at}）`;
+  el.style.display = 'flex';
+}
+
+function dismissInboxBanner() {
+  const el = document.getElementById('inbox-banner');
+  if (el) el.style.display = 'none';
+  localStorage.removeItem('inbox-notification');
+}
+
+function viewNewTasks() {
+  const newBtn = document.getElementById('fc-new-btn');
+  if (newBtn) setFilter('new', newBtn);
+  dismissInboxBanner();
+  closeSidebar();
+}
+
+function loadInboxBanner() {
+  try {
+    const saved = localStorage.getItem('inbox-notification');
+    if (!saved) return;
+    const notif = JSON.parse(saved);
+    if (Date.now() - notif.time < 24 * 3600 * 1000) {
+      _renderInboxBanner(notif);
+    } else {
+      localStorage.removeItem('inbox-notification');
+    }
+  } catch {}
 }
 
 function toast(message, type = 'success') {
@@ -2883,6 +3070,7 @@ async function checkPw() {
 loadToken();
 loadProxyUrl();
 updateLastFetchDisplay();
+loadInboxBanner();
 renderTasks();
 
 // 24時間経過していたらNotionから自動取得
