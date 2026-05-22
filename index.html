@@ -2245,7 +2245,7 @@ const PERSON_NAME_MAP = {
 };
 
 // 楠元を示す全パターン（バリエーション対応）
-const KUSUMOTO_PATTERNS = [/楠元/, /kusumoto/i, /龍矢/];
+const KUSUMOTO_PATTERNS = [/楠元/, /楠本/, /kusumoto/i, /龍矢/];
 
 // アクションセクションのヘッダーパターン
 const ACTION_SECTION_PATTERNS = [
@@ -2303,6 +2303,9 @@ function cleanTaskName(line) {
     .replace(/[\s　]*楠元[\s　]*$/g, '')          // 末尾の楠元
     .replace(/^楠元[\s　]*[：:]\s*/g, '')          // 先頭「楠元：」
     .replace(/楠元[\s　]*(が|は|も|に|の|さん)/g, '') // 「楠元が〜」
+    .replace(/[\s　]*楠本[\s　]*$/g, '')           // 末尾の楠本（AI誤字）
+    .replace(/^楠本[\s　]*[：:]\s*/g, '')          // 先頭「楠本：」（AI誤字）
+    .replace(/楠本[\s　]*(が|は|も|に|の|さん)/g, '') // 「楠本が〜」
     .replace(/kusumoto[\s　]*/gi, '')
     .replace(/龍矢[\s　]*/g, '')
     .replace(/^[\[\]☐☑✓✔\s　]+/, '')             // チェックボックス記号
@@ -2337,10 +2340,11 @@ function extractKusumotoTasks(blocks, sourceName) {
   for (const block of blocks) {
     const { text, type, checked } = block;
 
-    // ① 見出しブロックでアクションセクション判定
+    // ① 見出しブロック
     if (['heading_1', 'heading_2', 'heading_3'].includes(type)) {
       inActionSection = ACTION_SECTION_PATTERNS.some(p => p.test(text));
-      continue;
+      // 見出しに楠元/楠本が含まれる場合はそのままタスクとして拾う（continueしない）
+      if (!KUSUMOTO_PATTERNS.some(p => p.test(text))) continue;
     }
 
     // ② 完了済みチェックボックスはスキップ
@@ -2368,14 +2372,23 @@ function extractKusumotoTasks(blocks, sourceName) {
 
     // parseQuickInputで期日・優先度を取得
     const parsed = parseQuickInput(taskName);
+
+    // 「決定事項：」プレフィックスを除去してタスク名をクリーン
+    const cleanedName = (parsed?.name || taskName)
+      .replace(/^決定事項[：:]\s*/g, '')
+      .replace(/^アクションアイテム[：:]\s*/g, '')
+      .trim();
+
+    if (!cleanedName || cleanedName.length < 2) continue;
+
     extracted.push({
-      name: parsed?.name || taskName,
+      name: cleanedName,
       status: '未着手',
       priority: parsed?.priority || inferPriorityFromText(text),
       domain: parsed?.domain || inferDomainFromText(taskName),
       deadline: parsed?.deadline || '',
       source: sourceName,
-      note: '',
+      note: parsed?.note || '',
       confidence,
     });
   }

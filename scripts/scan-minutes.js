@@ -133,7 +133,7 @@ async function createTask(task) {
 // タスク抽出ロジック（index.html と同一）
 // ========================================
 
-const KUSUMOTO_PATTERNS = [/楠元/, /kusumoto/i, /龍矢/];
+const KUSUMOTO_PATTERNS = [/楠元/, /楠本/, /kusumoto/i, /龍矢/];
 const ACTION_SECTION_PATTERNS = [
   /アクション/i, /TODO/i, /To[\s-]?Do/i, /対応事項/, /宿題/,
   /Action[\s-]?Item/i, /タスク/, /次回アクション/, /担当/, /やること/,
@@ -203,6 +203,9 @@ function cleanTaskName(line) {
     .replace(/[\s　]*楠元[\s　]*$/g, '')
     .replace(/^楠元[\s　]*[：:]\s*/g, '')
     .replace(/楠元[\s　]*(が|は|も|に|の|さん)/g, '')
+    .replace(/[\s　]*楠本[\s　]*$/g, '')        // AI誤字「楠本」
+    .replace(/^楠本[\s　]*[：:]\s*/g, '')
+    .replace(/楠本[\s　]*(が|は|も|に|の|さん)/g, '')
     .replace(/kusumoto[\s　]*/gi, '')
     .replace(/龍矢[\s　]*/g, '')
     .replace(/^[\[\]☐☑✓✔\s　]+/, '')
@@ -221,7 +224,8 @@ function extractKusumotoTasks(blocks, sourceName) {
 
     if (['heading_1', 'heading_2', 'heading_3'].includes(type)) {
       inActionSection = ACTION_SECTION_PATTERNS.some(p => p.test(text));
-      continue;
+      if (!KUSUMOTO_PATTERNS.some(p => p.test(text))) continue;
+      // 見出しに楠元/楠本が含まれる場合は以降でタスクとして処理
     }
 
     if (type === 'to_do' && checked === true) continue;
@@ -235,7 +239,10 @@ function extractKusumotoTasks(blocks, sourceName) {
     if (!isKusumoto && !inActionBullet) continue;
     if (!text || text.length < 4) continue;
 
-    const name = cleanTaskName(text);
+    let name = cleanTaskName(text);
+    if (!name || name.length < 2) continue;
+    // 「決定事項：」プレフィックスを除去
+    name = name.replace(/^決定事項[：:]\s*/, '').replace(/^アクションアイテム[：:]\s*/, '').trim();
     if (!name || name.length < 2) continue;
 
     const key = name.replace(/\s/g, '');
